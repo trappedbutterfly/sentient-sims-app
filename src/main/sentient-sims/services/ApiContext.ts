@@ -76,6 +76,7 @@ import { OpenRouterService } from './OpenRouterService';
 import { PatreonService } from './PatreonService';
 import { PromptRequestBuilderService } from './PromptRequestBuilderService';
 import { SceneService } from './SceneService';
+import { SceneMoodletService } from './SceneMoodletService';
 import {
   notifySceneStop,
   sendConversationClosedToMod,
@@ -282,6 +283,9 @@ export class ApiContext {
   private readonly _sceneService: SceneService;
 
   private readonly _scenePlaybackRegistry: ScenePlaybackRegistry;
+
+  private readonly _sceneMoodlets: SceneMoodletService;
+
   private readonly _playerConversationService: PlayerConversationService;
 
   private _defaultDescriptionService?: DefaultDescriptionService;
@@ -408,11 +412,13 @@ export class ApiContext {
         });
       },
     });
+    this._sceneMoodlets = new SceneMoodletService(this);
     this._scenePlaybackRegistry = new ScenePlaybackRegistry({
       notifyStop: notifySceneStop,
       // A conversation that closed is weighed for the moodlet it leaves on each sim, and
       // a reply to the player that wanted to act may act now that it has been heard
       onSceneClosed: (closed) => {
+        void this._sceneMoodlets.appraise(closed);
         for (const tier of this._tiers) {
           tier.onSceneClosed?.(this, closed);
         }

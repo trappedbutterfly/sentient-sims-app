@@ -46,6 +46,12 @@ These are the things to test. Ask Kean which ones she wants to try first.
 10. **Facts.** A Sim knows their home and who they live with, by name.
 11. **Lot descriptions.** Room-by-room details and lot traits in plain words, and the Locations
     editor shows which description the game is using right now.
+12. **Conversation moodlets.** When a voiced conversation between Sims ends, each Sim who was in it
+    can get a Sentient moodlet: one of 15 emotions, +1 to +3, lasting from an hour to most of a
+    day depending on what was said, with a sentence in the tooltip about why. Small talk leaves
+    nothing. The public app only does this after the typed chat window. Worth testing: does the
+    emotion fit what was said, does a big moment (a breakup, a confession) land stronger and longer
+    than a light chat, and does the tooltip text show.
 
 Gus's debug pages (Chat, Traits, OfflineMemory, Log Viewer, Mapping Browser) are here as in the
 public app; they show when debug mode is on.
