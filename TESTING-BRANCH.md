@@ -15,7 +15,8 @@ own code").
 
 You may be reading this with `git show origin/jaz-testing:TESTING-BRANCH.md` from Kean's usual
 `sentient-sims-app` folder. Good: do not switch that folder's branch. Kean may have her own work in
-it, and the setup below leaves it exactly as it is.
+it, and the setup below leaves it exactly as it is. If Claude was opened somewhere else, find her
+clone of `trappedbutterfly/sentient-sims-app` on her computer (ask her), or make one (step 1).
 
 If her usual folder was already switched to `jaz-testing`, run `git status` there. If it shows
 changes, those are Kean's own work that came along with the switch: tell her, then move them to her
@@ -44,9 +45,11 @@ The app Kean runs is whatever branch is checked out in the folder she starts it 
 The testing folder is a git **worktree**: a second folder of the same clone, so both see the same
 branches, commits and stashes. Nobody ever edits files or commits in it.
 
-Kean uses Claude Code in a terminal, so a session works in the folder she started it in. For
-setting up, updating and reporting, either folder is fine (reaching the other one may ask her
-permission once, or use `/add-dir`); for her own coding, she starts Claude in her usual folder.
+Kean is new to coding. Explain every step in plain words and say what it is for, do the typing for
+her, and never assume she knows a term (terminal, branch, commit, folder paths). A Claude Code
+session works in the folder it was opened in: for setting up, updating and reporting either folder
+is fine (reaching the other one may ask her permission once, or use `/add-dir`); for her own coding,
+it is opened in her usual folder.
 
 ## Setting it up
 
@@ -75,10 +78,13 @@ Do these with Kean, one at a time, and say what each step is for.
    OneDrive it is the OneDrive Documents folder). Copy that folder somewhere safe. This build adds a
    few empty tables to a save's database on first load. The public app ignores them, so going back
    is safe, but a backup costs nothing.
-6. **Run it**, from the testing folder. Close the installed Sentient Sims app first (two copies fight
-   over the same ports). Then Kean runs `npm run start` herself in its own terminal window, not as a
-   background task of yours, so closing Claude never closes the app mid-game. Start the app
-   **before** the game.
+6. **Make her a launcher, then run it.** Put a double-click shortcut on her Desktop, named
+   "Sentient Sims (testing)", that opens its own window and runs `npm run start` in the testing folder
+   (Windows: a `.cmd` file that `cd /d`s to the folder, runs `npm run start`, then `pause`; Mac: a
+   `.command` file, `chmod +x`). Its own window means closing Claude never closes the app mid-game,
+   so never start the app as a background task of yours. Show her where it is, then have her: close
+   the installed Sentient Sims app first (two copies fight over the same ports), double-click the
+   launcher, and start the game only once the app is open.
 7. **Settings.** An app started with `npm run start` keeps its settings apart from the installed app
    (Windows `%APPDATA%\Electron\config.json`, Mac `~/Library/Application Support/Electron/config.json`),
    so Kean enters her AI provider and keys once in this app's Settings page, and logs in again if it
