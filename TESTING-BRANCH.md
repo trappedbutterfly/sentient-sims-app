@@ -44,6 +44,10 @@ The app Kean runs is whatever branch is checked out in the folder she starts it 
 The testing folder is a git **worktree**: a second folder of the same clone, so both see the same
 branches, commits and stashes. Nobody ever edits files or commits in it.
 
+Kean uses Claude Code in a terminal, so a session works in the folder she started it in. For
+setting up, updating and reporting, either folder is fine (reaching the other one may ask her
+permission once, or use `/add-dir`); for her own coding, she starts Claude in her usual folder.
+
 ## Setting it up
 
 Do these with Kean, one at a time, and say what each step is for.
@@ -72,7 +76,9 @@ Do these with Kean, one at a time, and say what each step is for.
    few empty tables to a save's database on first load. The public app ignores them, so going back
    is safe, but a backup costs nothing.
 6. **Run it**, from the testing folder. Close the installed Sentient Sims app first (two copies fight
-   over the same ports). Then `npm run start`. Start the app **before** the game.
+   over the same ports). Then Kean runs `npm run start` herself in its own terminal window, not as a
+   background task of yours, so closing Claude never closes the app mid-game. Start the app
+   **before** the game.
 7. **Settings.** An app started with `npm run start` keeps its settings apart from the installed app
    (Windows `%APPDATA%\Electron\config.json`, Mac `~/Library/Application Support/Electron/config.json`),
    so Kean enters her AI provider and keys once in this app's Settings page, and logs in again if it
