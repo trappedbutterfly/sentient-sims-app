@@ -1,42 +1,128 @@
 # The `jaz-testing` branch
 
-For Claude, working with Kean, the Sentient Sims mod tester. Read all of this before you touch the
-repo, then explain it to Kean in plain words when she asks what the branch is or how to use it.
+For Claude, working with Kean, the Sentient Sims mod tester. Read all of this before you change
+anything in Kean's folders, then explain it to Kean in plain words, one step at a time.
+
+## The goal, in one paragraph
+
+Kean plays The Sims with **this** app as her everyday Sentient Sims app, so Jaz's newest version
+gets real play before it goes to Gus (the mod's author, who publishes the public app). The main thing
+under test is the **lean voice pipeline** (below). Everything else on the list is a bonus to notice
+while playing. Kean's own coding projects are separate and never happen on this branch (see "Kean's
+own code").
+
+## If you are reading this before setting anything up
+
+You may be reading this with `git show origin/jaz-testing:TESTING-BRANCH.md` from Kean's usual
+`sentient-sims-app` folder. Good: do not switch that folder's branch. Kean may have her own work in
+it, and the setup below leaves it exactly as it is.
+
+If her usual folder was already switched to `jaz-testing`, run `git status` there. If it shows
+changes, those are Kean's own work that came along with the switch: tell her, then move them to her
+own branch (see "If her work ended up in the wrong place") before going on.
 
 ## What this branch is
 
-`jaz-testing` is Jaz's newest version of the **Sentient Sims companion app**, cut down to what is
-meant to reach every player eventually. Kean tests it before it goes to Gus (the mod's author, who
-publishes the public app). It is only the app. The game mod stays whatever Kean normally plays with.
-
-It is Gus's public app (`guspuffygit/sentient-sims-app`, `main`, version 4.6.11) plus one commit per
-update from Jaz. Each commit message lists what changed. Jaz's side owns this branch and pushes to it.
+Gus's public app (`guspuffygit/sentient-sims-app`, `main`, version 4.6.11) plus one commit per update
+from Jaz, each listing what changed. It is only the app: the game mod stays whatever Kean normally
+plays with. Jaz's side owns the branch and pushes to it (JazKieten is a collaborator on Kean's fork for
+that).
 
 Things Jaz is still building or only uses on stream were left out on purpose. If a feature from Jaz's
 streams is missing here, that is expected, not a bug. Do not go looking for it or try to rebuild it.
 
-## What is new compared with the public app
+## Two folders: one to play, one to code
 
-These are the things to test. Ask Kean which ones she wants to try first.
+The app Kean runs is whatever branch is checked out in the folder she starts it from. To keep
+"playing Jaz's version" and "my own coding" from mixing, use two folders:
 
-1. **Lean voice pipeline (on by default).** Conversations make one AI call per Sim per round
-   instead of four stages, so lines start sooner and cost less. The switch is in Settings >
-   Advanced > Directed Scenes ("lean" or "full"). Worth testing: do conversations still make sense,
-   do Sims stay on topic for all three rounds, does a Sim who is lying keep the lie going.
-2. **Stale conversations are dropped instead of aired late.** On a busy lot, a conversation that
-   the game has already moved past (over a minute old, or the Sims have gone off with someone else
-   or left the lot) is skipped rather than played minutes later.
+| Folder | Branch | Used for |
+|---|---|---|
+| `sentient-sims-app` (her usual clone) | her own `kean/...` branches | her own coding |
+| `sentient-sims-app-testing` (new, next to it) | `jaz-testing`, always | playing and testing |
+
+The testing folder is a git **worktree**: a second folder of the same clone, so both see the same
+branches, commits and stashes. Nobody ever edits files or commits in it.
+
+## Setting it up
+
+Do these with Kean, one at a time, and say what each step is for.
+
+1. **Check the remotes.** In her usual folder, `git remote -v`. Below, `origin` means **Kean's
+   fork** (`github.com/<her-username>/sentient-sims-app`). If `origin` is Gus's repo instead, use
+   the remote that points at her fork, or add it: `git remote add fork <her fork's URL>`. Gus's repo
+   should be a remote named `upstream`; add it if missing:
+   `git remote add upstream https://github.com/guspuffygit/sentient-sims-app.git`.
+   No clone yet: `git clone https://github.com/<her-username>/sentient-sims-app.git` makes her usual
+   folder.
+2. **Make the testing folder.** In her usual folder:
+   ```
+   git fetch origin
+   git worktree add --track -b jaz-testing ../sentient-sims-app-testing origin/jaz-testing
+   ```
+   If git says a `jaz-testing` branch already exists, drop `--track -b jaz-testing` and give
+   `jaz-testing` as the last word instead. If it says the branch is checked out in her usual folder,
+   switch that folder back to her own branch first (after the `git status` check above).
+3. **Node.** The app needs Node **24.15.0** (`.nvmrc`). With nvm: `nvm install 24.15.0` and
+   `nvm use 24.15.0`. Check with `node -v`.
+4. **Install**, in the testing folder: `npm ci`. A few minutes the first time.
+5. **Back up her saves' AI data.** The app keeps one database per save in
+   `Documents/Electronic Arts/The Sims 4/Mods/sentient-sims/` (the `.db` files; on a Windows PC with
+   OneDrive it is the OneDrive Documents folder). Copy that folder somewhere safe. This build adds a
+   few empty tables to a save's database on first load. The public app ignores them, so going back
+   is safe, but a backup costs nothing.
+6. **Run it**, from the testing folder. Close the installed Sentient Sims app first (two copies fight
+   over the same ports). Then `npm run start`. Start the app **before** the game.
+7. **Settings.** An app started with `npm run start` keeps its settings apart from the installed app
+   (Windows `%APPDATA%\Electron\config.json`, Mac `~/Library/Application Support/Electron/config.json`),
+   so Kean enters her AI provider and keys once in this app's Settings page, and logs in again if it
+   asks. Every app she starts from either folder shares those settings.
+
+To go back to the public app at any time: close this one and open the installed app as usual.
+
+## What to test
+
+### The lean voice pipeline (the main one)
+
+On by default: Settings > Advanced > **Lean voice pipeline**. A conversation used to make four AI
+calls per round (director briefing, actors, reviewer, scores); lean makes one call per Sim per round
+and carries the game's reason for the conversation into every round. Lines should start in about
+1.5 s instead of about 5, for about a third of the cost. The switch takes effect on the next
+conversation, no restart.
+
+While playing, notice:
+- Does the first line come quickly once Sims start talking?
+- Are the lines a natural length (not one word, not speeches)?
+- Does a conversation stay on what the game started it as for all three rounds (a "talk about
+  hobbies" stays about hobbies)?
+- When a Sim tells a lie (for example a social where they lie about their career), do they keep it up
+  through the whole conversation, without the other Sim somehow knowing?
+- Talking to a Sim yourself (chat window or voice): a straight answer, and "<Name> has said their
+  piece" when they are done.
+- Now and then, switch it off for a while to feel the old pipeline, and say which reads better.
+
+Note the AI provider and model in every report: lean behaves differently on different models.
+
+### Also new compared with the public app
+
+1. **Conversation moodlets.** When a voiced conversation ends, each Sim in it can get a Sentient
+   moodlet: one of 15 emotions, +1 to +3, an hour to most of a day depending on what was said, with a
+   sentence in the tooltip about why. Small talk leaves nothing. (The public app only does this after
+   the typed chat window.) Does the emotion fit, does a big moment land stronger and longer than a
+   light chat, does the tooltip text show?
+2. **Stale conversations are dropped instead of aired late.** On a busy lot, a conversation the
+   game has already moved past (over a minute old, or the Sims went off with someone else or left the
+   lot) is skipped rather than played minutes later.
 3. **ElevenLabs voices.** Each line is spoken in the speaker's mood, long replies are stitched
-   smoothly, the next scene is prepared ahead, and on the v4 model the neighbouring lines are sent
-   as context so the delivery flows. Needs Kean's own ElevenLabs key.
+   smoothly, the next conversation is prepared ahead, and on the v4 model the neighbouring lines are
+   sent as context so the delivery flows. Needs Kean's own ElevenLabs key.
 4. **Name pronunciation.** A Sim's name can be given a pronunciation (IPA, in the Sims page), and
    every voiced line uses it, whoever says the name. Keep the syllable dots, for example `/ˈhæl.i/`.
-5. **Word-by-word subtitles.** Voiced lines carry the time each word is spoken, so the subtitle or
-   speech bubble can reveal words in time with the voice. This needs a mod build that reads it; with
-   an older mod the line simply shows whole.
-6. **Voice input with ElevenLabs Scribe.** Talking to Sims by voice can use Scribe v2, which is
-   told the names of the Sims around, so names come out spelled right. Pick ElevenLabs as the
-   provider in the voice input settings; it reuses the ElevenLabs key from the Voices settings.
+5. **Word-by-word subtitles.** Voiced lines carry the time each word is spoken, so a mod that reads
+   it can reveal words in time with the voice. With her current mod the line simply shows whole.
+6. **Voice input with ElevenLabs Scribe.** Talking to Sims by voice can use Scribe v2, which is told
+   the names of the Sims around, so names come out spelled right. Pick ElevenLabs as the provider in
+   the voice input settings; it reuses the ElevenLabs key from the Voices settings.
 7. **Plain-language errors.** Patreon link problems, the error popup, voice and AI status say what
    went wrong and what to do, instead of raw error text.
 8. **Sleep diaries.** When the AI refuses to write a diary (it happens around WickedWhims nights on
@@ -46,81 +132,64 @@ These are the things to test. Ask Kean which ones she wants to try first.
 10. **Facts.** A Sim knows their home and who they live with, by name.
 11. **Lot descriptions.** Room-by-room details and lot traits in plain words, and the Locations
     editor shows which description the game is using right now.
-12. **Conversation moodlets.** When a voiced conversation between Sims ends, each Sim who was in it
-    can get a Sentient moodlet: one of 15 emotions, +1 to +3, lasting from an hour to most of a
-    day depending on what was said, with a sentence in the tooltip about why. Small talk leaves
-    nothing. The public app only does this after the typed chat window. Worth testing: does the
-    emotion fit what was said, does a big moment (a breakup, a confession) land stronger and longer
-    than a light chat, and does the tooltip text show.
 
 Gus's debug pages (Chat, Traits, OfflineMemory, Log Viewer, Mapping Browser) are here as in the
 public app; they show when debug mode is on.
 
-## Setting it up on Kean's computer
+## Reporting what she finds
 
-Do these with Kean, one at a time, and say what each step is for.
-
-1. **Give Jaz access to the fork.** On github.com, in Kean's fork of `sentient-sims-app`:
-   Settings > Collaborators > Add people > `JazKieten`. Jaz accepts the invite from email. This lets
-   Jaz push the branch; it does not give access to anything else Kean owns. Also press
-   **Sync fork** on the fork's main page first, so the fork has Gus's latest (a push can be refused
-   when the fork is behind Gus).
-2. **Get the code.** In Kean's local clone of her fork:
-   ```
-   git fetch origin
-   git switch jaz-testing
-   ```
-   If Kean has no clone yet: `git clone https://github.com/<kean-github-username>/sentient-sims-app.git`
-   and then the two lines above inside it.
-3. **Node.** The app needs Node **24.15.0** (`.nvmrc`). With nvm: `nvm install 24.15.0` and
-   `nvm use 24.15.0`. Check with `node -v`.
-4. **Install.** `npm ci` in the repo folder. It takes a few minutes the first time.
-5. **Back up her saves' AI data first.** The app keeps one database per save in
-   `Documents/Electronic Arts/The Sims 4/Mods/sentient-sims/` (the `.db` files; on a PC with
-   OneDrive it is the OneDrive Documents folder). Copy that folder somewhere safe. This build adds a
-   few empty tables to a save's database on first load. The public app ignores them, so going back
-   is safe, but a backup costs nothing.
-6. **Run it.** Close the installed Sentient Sims app first (two copies fight over the same ports).
-   Then `npm run start`. Start the app **before** the game.
-7. **Settings carry over.** The dev app keeps its settings separately from the installed app (on
-   Windows in `%APPDATA%\Electron\config.json`), so Kean enters her AI provider and keys once in
-   this app's Settings page.
-
-To go back to the public app at any time: close this one and open the installed app as usual.
+For each thing, note: what she did, what she expected, what happened, the time, and the AI provider
+and model. The app's log is `main.log` (Windows `%APPDATA%\Electron\logs\`, Mac
+`~/Library/Logs/Electron/`); the Open Log Folder button on the Home page opens it. Send Jaz the log
+lines from around that time with the note.
 
 ## Getting Jaz's updates
 
-When Jaz says there is a new build:
+When Jaz says there is a new build, in the testing folder:
 ```
-git fetch origin
-git switch jaz-testing
-git merge --ff-only origin/jaz-testing
+git pull --ff-only
 npm ci
 ```
-Then restart the app. `npm ci` only matters when `package-lock.json` changed, but it is safe to run
-every time. If `--ff-only` refuses, someone committed on `jaz-testing` locally; see the next part.
+Then restart the app. `npm ci` only matters when `package-lock.json` changed, but it is safe every
+time. If `--ff-only` refuses, something was committed in the testing folder; see "If her work ended
+up in the wrong place".
 
-## Kean building on top of it
+## Kean's own code
 
-`jaz-testing` belongs to Jaz's side: never commit on it, or the next update will not apply cleanly.
-For Kean's own changes:
-```
-git switch -c kean/<short-name> jaz-testing
-# ...work, commit...
-git push -u origin kean/<short-name>
-```
-To pick up a new Jaz build in that branch: `git fetch origin && git merge origin/jaz-testing`.
-Tell Jaz the branch name when something is ready; Jaz's side brings it over from Kean's fork.
+The rule: **code only in her usual folder, always on her own `kean/<short-name>` branch, never on
+`jaz-testing`.** Make the branch before the first change, not after.
 
-A pull request to **Gus** must start from Gus's `main`, not from `jaz-testing`, or it would carry all
-of Jaz's unreleased changes with it: `git fetch upstream && git switch -c pr/<name> upstream/main`
-(add the remote once: `git remote add upstream https://github.com/guspuffygit/sentient-sims-app.git`).
+Where the branch starts depends on what the change is for. Ask her if it is not obvious.
+- **Anything that could go to Gus** (a fix, a feature for every player, her own experiment): start
+  from Gus's code.
+  ```
+  git fetch upstream
+  git switch -c kean/<short-name> upstream/main
+  ```
+  Only a branch started this way can become a pull request to Gus. One started from `jaz-testing`
+  would carry all of Jaz's unreleased changes with it.
+- **A change to something that only exists in `jaz-testing`** (the lean pipeline, the moodlets):
+  start from Jaz's branch, and it goes to Jaz, not Gus.
+  ```
+  git fetch origin
+  git switch -c kean/<short-name> origin/jaz-testing
+  ```
 
-## Reporting what she finds
+Commit as she goes and push the branch to her fork (`git push -u origin kean/<short-name>`), so it is
+backed up and Jaz can see it. Tell Jaz the branch name when something is ready.
 
-For each thing Kean tests, note: what she did, what she expected, what happened, and the time. The
-app's log is `main.log` in the app's logs folder (Windows: `%APPDATA%\Electron\logs\`); the Open Log
-Folder button on the Home page opens it. Send Jaz the log lines from around that time with the note.
+Running her own code: close the testing app, then `npm run start` from her usual folder. A branch
+started from Gus's code is the public app plus her change, not Jaz's version; that is expected.
+Switching back to playing means closing that app and starting the one in the testing folder.
+
+### If her work ended up in the wrong place
+
+- **Uncommitted changes in the testing folder** (or carried onto `jaz-testing` by a switch): in that
+  folder `git stash push -u -m "<what it is>"`; in her usual folder make her `kean/` branch as above,
+  then `git stash pop`. Stashes are shared between the two folders.
+- **Commits on `jaz-testing`:** in that folder `git branch kean/<short-name>` (keeps them), check with
+  `git log kean/<short-name>` that they are there, then, with Kean's OK, put `jaz-testing` back:
+  `git reset --hard origin/jaz-testing`.
 
 ## For Claude: working in this tree
 
