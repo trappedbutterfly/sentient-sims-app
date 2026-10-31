@@ -28,7 +28,6 @@ export function runApi(ctx: ApiContext) {
   expressApp.post('/ai/v3/event/buff', ctx.controller.ai.buffEvent);
   expressApp.post('/ai/v2/image/generate', ctx.controller.ai.generateImage);
   expressApp.get('/ai/v2/models', ctx.controller.ai.getModels);
-  expressApp.get('/ai/v2/tts', ctx.controller.ai.tts);
 
   expressApp.get('/files/last-exception', ctx.controller.file.getLastExceptionFiles);
   expressApp.delete('/files/last-exception', ctx.controller.file.deleteLastExceptionFiles);
@@ -104,7 +103,7 @@ export function runApi(ctx: ApiContext) {
   expressApp.post('/traits/export', ctx.controller.mapping.exportTraits);
   expressApp.get('/moods', ctx.controller.mapping.getMoods);
   expressApp.get('/moods/unmapped', ctx.controller.mapping.getUnmappedMoods);
-  expressApp.post('/mappings/review', ctx.controller.mapping.reviewMapping);
+  expressApp.post('/mappings/review', ctx.controller.mappingReview.reviewMapping);
 
   expressApp.post('/interactions/save-locally', ctx.controller.interactionDescription.saveInteractionLocally);
   expressApp.delete('/interactions/local', ctx.controller.interactionDescription.deleteLocalInteraction);
@@ -121,12 +120,6 @@ export function runApi(ctx: ApiContext) {
   expressApp.post('/options/fix', ctx.controller.options.fixOptions);
   expressApp.post('/options/detect-mods', ctx.controller.options.detectModsDirectory);
 
-  expressApp.post('/cognition/outcome', ctx.controller.cognition.postOutcome);
-  expressApp.post('/cognition/perception', ctx.controller.cognition.postPerception);
-  expressApp.post('/cognition/sleep-boundary', ctx.controller.cognition.postSleepBoundary);
-  expressApp.post('/cognition/debug/enqueue', ctx.controller.cognition.debugEnqueue);
-  expressApp.post('/cognition/debug/perception', ctx.controller.cognition.debugRequestPerception);
-
   expressApp.post('/cognition/state', ctx.controller.simState.postState);
   expressApp.post('/cognition/dossier', ctx.controller.dossier.postDossier);
 
@@ -139,6 +132,7 @@ export function runApi(ctx: ApiContext) {
   expressApp.post('/sims/:id/facts', ctx.controller.simFacts.addFact);
   expressApp.put('/sims/:id/facts/:factId', ctx.controller.simFacts.editFact);
   expressApp.delete('/sims/:id/facts/:factId', ctx.controller.simFacts.retireFact);
+  expressApp.post('/cognition/sleep-boundary', ctx.controller.simState.postSleepBoundary);
 
   // The build tiers' routes, after every core route (release 4.5)
   for (const tier of ctx.tiers) {

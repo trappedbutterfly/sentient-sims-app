@@ -4,7 +4,6 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material';
 import { Amplify } from 'aws-amplify';
-import '@patternfly/react-core/dist/styles/base.css';
 import '@fontsource-variable/inter';
 import '@aws-amplify/ui-react/styles.css';
 import { Authenticator } from '@aws-amplify/ui-react';
@@ -16,19 +15,19 @@ import SettingsPage from './SettingsPage';
 import ChatPage from './ChatPage';
 import LastExceptionPage from './LastExceptionPage';
 import { DebugModeProvider } from './providers/DebugModeProvider';
-import LogViewerPage from './LogViewerPage';
 import MemoriesPage from './MemoriesPage';
 import LocationsPage from './LocationsPage';
+import LogViewerPage from './LogViewerPage';
 import { ChatGenerationProvider } from './providers/ChatGenerationProvider';
+import TraitsPage from './TraitsPage';
+import OfflineMemory from './OfflineMemory';
 import SimsPage from './SimsPage';
 import { SnackBarProvider } from './providers/SnackBarProvider';
 import { AISettingsProvider } from './providers/AISettingsProvider';
 import { VersionsProvider } from './providers/VersionsProvider';
 import { ModUpdateProvider } from './providers/ModUpdateProvider';
-import TraitsPage from './TraitsPage';
 import { AudioContextProvider } from './providers/AudioContextProvider';
 import { VoiceInputProvider } from './providers/VoiceInputProvider';
-import OfflineMemory from './OfflineMemory';
 import { WebsocketProvider } from './providers/WebsocketProvider';
 import 'aws-amplify/auth/enable-oauth-listener';
 import { AuthProvider } from './providers/AuthProvider';
@@ -49,12 +48,12 @@ const router = createMemoryRouter([
         element: <HomePage />,
       },
       {
-        path: '/traits',
-        element: <TraitsPage />,
-      },
-      {
         path: '/mapping-browser',
         element: <OnlineMappingBrowser />,
+      },
+      {
+        path: '/traits',
+        element: <TraitsPage />,
       },
       {
         path: '/settings',
@@ -88,7 +87,7 @@ const router = createMemoryRouter([
         path: '/logs',
         element: <LogViewerPage />,
       },
-      // The build tiers' pages (dev: the AI log)
+      // The build tiers' pages (dev: the scenario tester, AI log, log viewer, ...)
       ...rendererTiers.routes,
     ],
   },
@@ -100,6 +99,17 @@ Object.defineProperty(window.history, 'replaceState', {
 });
 
 const queryClient = new QueryClient();
+
+// The build tiers' providers (dev: the scenario tester's chat generation) wrap the router
+// inside the core ones, in tier order
+const routerWithTierProviders = rendererTiers.providers.reduceRight<React.ReactNode>(
+  (children, TierProvider) => <TierProvider>{children}</TierProvider>,
+  <ChatGenerationProvider>
+    <DebugModeProvider>
+      <RouterProvider router={router} />
+    </DebugModeProvider>
+  </ChatGenerationProvider>,
+);
 
 const container = document.getElementById('root') as HTMLElement;
 const root = createRoot(container);
@@ -117,13 +127,7 @@ root.render(
                     <ModUpdateProvider>
                       <AISettingsProvider>
                         <AudioContextProvider>
-                          <VoiceInputProvider>
-                            <ChatGenerationProvider>
-                              <DebugModeProvider>
-                                <RouterProvider router={router} />
-                              </DebugModeProvider>
-                            </ChatGenerationProvider>
-                          </VoiceInputProvider>
+                          <VoiceInputProvider>{routerWithTierProviders}</VoiceInputProvider>
                         </AudioContextProvider>
                       </AISettingsProvider>
                     </ModUpdateProvider>

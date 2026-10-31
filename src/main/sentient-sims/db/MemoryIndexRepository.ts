@@ -108,7 +108,7 @@ export class MemoryIndexRepository extends Repository {
       .run([BigInt(embedding.memory_id), embedding.embedding_model, embedding.embedding, BigInt(embedding.memory_id)]);
   }
 
-  // Drops every model's vector for a memory — for when its text changed and the stored
+  // Drops every model's vector for a memory � for when its text changed and the stored
   // embeddings no longer describe it.
   deleteEmbeddings(memoryId: string) {
     return this.dbService
@@ -127,12 +127,12 @@ export class MemoryIndexRepository extends Repository {
 
   // Recent memories involving any of the given participants, joined with their retrieval
   // metadata (LEFT JOINs: rows the annotator hasn't reached yet still show up, with null
-  // importance/embedding). Only the given model's embedding is joined — vectors from other
+  // importance/embedding). Only the given model's embedding is joined � vectors from other
   // models aren't comparable to the query. Newest-first window that MemoryRetrievalService
   // scores in process.
   // ownerScope gates private rows: a memory with a non-null owner only surfaces when that
   // owner is in scope (a sim retrieving for itself, or a scene the owner is part of).
-  // Omitted scope means shared rows only — privacy fails closed.
+  // Omitted scope means shared rows only � privacy fails closed.
   getRetrievalCandidates(
     participantIds: string[],
     limit: number,

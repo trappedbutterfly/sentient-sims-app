@@ -26,6 +26,8 @@ export const FactPredicate = {
   // state report, not the dossier, which never says what kind of creature a sim is.
   SPECIES: 'species',
   HOUSEHOLD: 'household',
+  // Where the household lives: 'Inner Circle, Mirage Park, Del Sol Valley'
+  HOME: 'home',
   TRAIT: 'trait',
   // A reward trait: earned from an aspiration (Business Savvy), a childhood (Top-Notch
   // Infant) or a child's skills (Headstrong). Stays with the sim for life.
@@ -60,6 +62,16 @@ export const FactPredicate = {
   EX_PARTNER: 'ex_partner',
   FAMILY_BIT: 'family_bit',
   KNOWS: 'knows',
+  // Renovation R5a, the private view's game facts. Rendered into no prompt yet (R5b decides
+  // where): a relationship bit the game holds between the two, and what the subject KNOWS
+  // about the other Sim (SimKnowledge: a trait, the career, the major, a secret, whether they
+  // know the other is taken). objectText is the game's tuning name.
+  REL_BIT: 'rel_bit',
+  KNOWS_TRAIT: 'knows_trait',
+  KNOWS_CAREER: 'knows_career',
+  KNOWS_MAJOR: 'knows_major',
+  KNOWS_SECRET: 'knows_secret',
+  KNOWS_STATUS: 'knows_status',
 } as const;
 
 export type FactPredicate = (typeof FactPredicate)[keyof typeof FactPredicate];
@@ -77,6 +89,12 @@ export const EDGE_PREDICATES: ReadonlySet<string> = new Set([
   FactPredicate.EX_PARTNER,
   FactPredicate.FAMILY_BIT,
   FactPredicate.KNOWS,
+  FactPredicate.REL_BIT,
+  FactPredicate.KNOWS_TRAIT,
+  FactPredicate.KNOWS_CAREER,
+  FactPredicate.KNOWS_MAJOR,
+  FactPredicate.KNOWS_SECRET,
+  FactPredicate.KNOWS_STATUS,
 ]);
 
 // A sim has exactly one of each of these at a time, so a new value RETIRES the old one
@@ -94,6 +112,7 @@ export const SINGLE_VALUED_PREDICATES: ReadonlySet<string> = new Set([
   FactPredicate.DEATH_TYPE,
   FactPredicate.SPECIES,
   FactPredicate.HOUSEHOLD,
+  FactPredicate.HOME,
   FactPredicate.ASPIRATION,
   FactPredicate.SPOUSE,
   FactPredicate.FIANCE,
@@ -122,6 +141,7 @@ export const FACT_PREDICATE_HELP: Record<FactPredicate, string> = {
   household:
     'The name of the household this Sim belongs to, as shown in Manage Worlds (for example "Calloway"). ' +
     'It is the family name on the mailbox, not a list of who lives there - see "household member" for the people.',
+  home: 'The lot the household lives on, with its neighborhood and world, like "Inner Circle, Mirage Park, Del Sol Valley".',
   trait: 'A personality trait from Create a Sim, like Cheerful or Loner.',
   reward_trait:
     "A trait the Sim earned and keeps: from an aspiration, from a well-raised childhood, or from a child's skills.",
@@ -146,6 +166,13 @@ export const FACT_PREDICATE_HELP: Record<FactPredicate, string> = {
   family_bit:
     "The game's exact label for a family relationship. This is where step-, half- and in-law relations show up.",
   knows: 'Someone this Sim has met at least once.',
+  rel_bit:
+    'A relationship bit the game holds between this Sim and the other one (friends, enemies, an ex, a sentiment).',
+  knows_trait: 'A trait of the other Sim that this Sim has learned (getting to know them).',
+  knows_career: "The other Sim's career, which this Sim has learned.",
+  knows_major: "The other Sim's university major, which this Sim has learned.",
+  knows_secret: 'A secret of the other Sim that this Sim has found out.',
+  knows_status: 'This Sim knows whether the other Sim is in a relationship.',
 };
 
 export function isKnownPredicate(value: unknown): value is FactPredicate {

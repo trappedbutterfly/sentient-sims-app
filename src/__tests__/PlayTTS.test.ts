@@ -256,6 +256,52 @@ describe('playTTSLines', () => {
     expect(sentVoiceLines()[0].deliveryNote).toBeUndefined();
   });
 
+  it('reads a stored pronunciation in place of the name while the subtitle keeps the name', () => {
+    playTTSLines(
+      [
+        { speaker: 'Bella Goth', text: "Ricky, have you seen Ricky Rickerson's boat? Rickyson hasn't." },
+        { speaker: 'Ricky Rickerson', text: 'Maybe next weekend, Bella.' },
+      ],
+      [ricky, bella],
+      { voiceType: VoiceType.ElevenLabs, pronunciations: [{ name: 'Ricky Rickerson', ipa: 'ˈrɪki ˈrɪkərsən' }] },
+    );
+
+    const lines = sentVoiceLines();
+    expect(lines[0].text).toEqual("Ricky, have you seen Ricky Rickerson's boat? Rickyson hasn't.");
+    expect(lines[0].ttsText).toEqual("/ˈrɪki ˈrɪkərsən/, have you seen /ˈrɪki ˈrɪkərsən/'s boat? Rickyson hasn't.");
+    // Bella has no pronunciation stored, so Ricky's line reads as written
+    expect(lines[1].ttsText).toBeUndefined();
+  });
+
+  it('reads the pronunciation of a sim who is talked about but not in the scene', () => {
+    // Live 2026-10-12: Anker's reply to the player mentioned Halley, who was not in his
+    // scene, and her name read hay-lee because only the cast's pronunciations were used
+    playTTSLines(
+      [{ speaker: 'Ricky Rickerson', text: 'So what do I think about Halley? Halley is lovely.' }],
+      [ricky],
+      {
+        voiceType: VoiceType.ElevenLabs,
+        pronunciations: [{ name: 'Halley Calloway', ipa: 'ˈhæl.i' }],
+      },
+    );
+
+    const lines = sentVoiceLines();
+    expect(lines[0].text).toEqual('So what do I think about Halley? Halley is lovely.');
+    expect(lines[0].ttsText).toEqual('So what do I think about /ˈhæl.i/? /ˈhæl.i/ is lovely.');
+  });
+
+  it('applies pronunciations to an uncast line as well', () => {
+    playTTSLines([{ speaker: 'Narrator', text: 'Halley walks in.' }], undefined, {
+      pronunciations: [{ name: 'Halley Calloway', ipa: 'ˈhæl.i' }],
+    });
+    expect(sentVoiceLines()[0].ttsText).toEqual('/ˈhæl.i/ walks in.');
+  });
+
+  it('leaves lines alone when no pronunciations are supplied', () => {
+    playTTSLines([{ speaker: 'Bella Goth', text: 'Ricky!' }], [ricky, bella], { voiceType: VoiceType.ElevenLabs });
+    expect(sentVoiceLines()[0].ttsText).toBeUndefined();
+  });
+
   it('prefers a pinned kokoro blend over the automatic cast', () => {
     playTTSLines([{ speaker: 'Ricky Rickerson', text: 'Been fishing here for years.' }], [ricky], {
       voiceType: VoiceType.Kokoro,

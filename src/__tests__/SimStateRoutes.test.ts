@@ -3,9 +3,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runApi } from 'main/sentient-sims/api';
 import { mockApiContext } from './util';
 
-// The state report is a CORE route (release 4.5, decision 14), and so is Gus's sleep
-// boundary (CognitionRoutes.test.ts has his test); these are our cases for both. Run here
-// with no tiers at all.
+// The state report and the sleep boundary are CORE routes (release 4.5, decisions 14 and
+// 15): the state cache and the sleep diary ship in every build. Moved from
+// CognitionRoutes.test.ts, which keeps the autonomy routes; run here with no tiers at all.
 describe('sim state routes', () => {
   const ctx = mockApiContext({ port: 25207, tiers: [] });
   const apiUrl = `http://localhost:${ctx.port}`;
@@ -34,6 +34,45 @@ describe('sim state routes', () => {
         }
       });
     });
+  });
+
+  it('sleep boundary reflects on the current scene and starts a new one', async () => {
+    // No active scene yet: nothing to reflect on
+    expect(await post('/cognition/sleep-boundary', { sim_id: '123' })).toMatchObject({
+      ok: true,
+      reflected: false,
+    });
+
+    const reflectedScenes: unknown[] = [];
+    const reflectedPovs: unknown[] = [];
+    const reflectedBoundaries: unknown[] = [];
+    vi.spyOn(ctx.ai, 'runSceneReflection').mockImplementation((scene, pov, boundary) => {
+      reflectedScenes.push(scene);
+      reflectedPovs.push(pov);
+      reflectedBoundaries.push(boundary);
+      return Promise.resolve();
+    });
+
+    ctx.sceneService.checkSceneBoundary({ environment: { location_id: 42 } } as never);
+    const scene = ctx.sceneService.getCurrentScene();
+    expect(scene).toBeTruthy();
+
+    const result = await post('/cognition/sleep-boundary', { sim_id: '123', sim_name: 'Marisol Rocca' });
+    expect(result).toMatchObject({ ok: true, reflected: true, scene_id: scene?.sceneId });
+    expect(reflectedScenes).toHaveLength(1);
+    expect(reflectedScenes[0]).toMatchObject({ sceneId: scene?.sceneId, locationId: 42 });
+    // First-person reflections need to know whose head they're in, and the diary
+    // framing needs to know the day is closing (vs a travel boundary)
+    expect(reflectedPovs[0]).toMatchObject({ simId: '123', simName: 'Marisol Rocca' });
+    expect(reflectedBoundaries[0]).toBe('sleep');
+
+    // The old scene ended and a fresh one started at the same location, so the next
+    // travel boundary only covers what happens after the nap
+    const nextScene = ctx.sceneService.getCurrentScene();
+    expect(nextScene?.sceneId).not.toBe(scene?.sceneId);
+    expect(nextScene?.locationId).toBe(42);
+
+    expect(await post('/cognition/sleep-boundary', {})).toMatchObject({ error: 'sim_id is required' });
   });
 
   it('sleep boundary leaves a scene the sleeper was never in alone', async () => {
@@ -66,7 +105,7 @@ describe('sim state routes', () => {
   });
 
   it('sleep boundary from an infant writes no diary and leaves the scene running (J8)', async () => {
-    // the 2026-09-04 playtest handoff, cause 8: an infant naps several times a day; each nap ended
+    // Jaz's 09-04 handoff, cause 8: an infant naps several times a day; each nap ended
     // the household's scene and wrote the infant a first-person diary
     const reflected: unknown[] = [];
     vi.spyOn(ctx.ai, 'runSceneReflection').mockImplementation((scene) => {

@@ -76,7 +76,6 @@ export class LogSendService {
       this.appendContentToZipFile(content, logZip, errors);
       this.appendFilesListToZipFile(logZip, errors);
       this.appendLogsFileToZipFile(logZip, errors);
-      this.appendOverlayLogToZipFile(logZip, errors);
       this.appendErrorDatabaseToZipFile(logZip, errors, sendLogsRequest.caughtError);
       this.appendLastExceptionFilesToZipFile(logZip, errors);
       this.appendAppLogsToZipFile(logZip, errors);
@@ -228,17 +227,6 @@ export class LogSendService {
       this.addTailToZip(zipFile, logFile, MAX_LOG_BYTES);
     } catch (err: any) {
       this.handleAppendError('Error attaching mod log file', err, errors);
-    }
-  }
-
-  private appendOverlayLogToZipFile(zipFile: AdmZip, errors: any[]) {
-    try {
-      const overlayLog = this.ctx.directory.getOverlayLogFile();
-      if (fs.existsSync(overlayLog)) {
-        this.addTailToZip(zipFile, overlayLog, MAX_LOG_BYTES);
-      }
-    } catch (err: any) {
-      this.handleAppendError('Error attaching overlay log file', err, errors);
     }
   }
 

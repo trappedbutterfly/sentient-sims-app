@@ -102,7 +102,7 @@ describe('STT dictionary (V-7)', () => {
     expect(levenshtein('same', 'same')).toBe(0);
   });
 
-  // J7 (the 2026-09-04 playtest handoff, cause 7): with Rainn Whiting in the pool, "Rin" was phonetic
+  // J7 (Jaz's 09-04 handoff, cause 7): with Rainn Whiting in the pool, "Rin" was phonetic
   // distance 1 from both Wren and Rainn and the clearly-closest rule let it through; the
   // sims then copied "Rin", "Ren" and "Hallie" into their thoughts and memories.
   it('settles the Wren/Rainn tie by raw spelling with the real pool', () => {

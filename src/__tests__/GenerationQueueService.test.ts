@@ -21,7 +21,7 @@ function generated(text = 'dialogue'): InteractionEventResult {
 }
 
 function makeContext(overrides: Record<string, unknown> = {}, generationConcurrency = 1) {
-  const play = vi.fn();
+  const play = vi.fn<(claimedAt?: number) => boolean>(() => true);
   const ai = {
     resolveInteractionPreAction: vi.fn(() => Promise.resolve({ preAction: 'Alex waves' })),
     interactionEventDeferred: vi.fn(() => Promise.resolve({ result: generated(), play })),
@@ -32,11 +32,13 @@ function makeContext(overrides: Record<string, unknown> = {}, generationConcurre
     })),
     ...overrides,
   };
+  const sceneFreshness = { recordEvent: vi.fn() };
   const ctx = {
     settings: { generationConcurrency, prefetchMaxQueueDepth: 2 },
     ai,
+    sceneFreshness,
   } as unknown as ApiContext;
-  return { ctx, ai, play };
+  return { ctx, ai, play, sceneFreshness };
 }
 
 describe('GenerationQueueService', () => {
@@ -297,8 +299,32 @@ describe('GenerationQueueService', () => {
 
     const claimed = await queue.claim(request);
 
-    expect(ai.interactionEvent).toHaveBeenCalledWith(request.event, { arrivedAt: expect.any(Number) as number });
+    // The claim is the game event: its time is what the scene is judged against; arrival
+    // starts the deadline clock
+    expect(ai.interactionEvent).toHaveBeenCalledWith(request.event, {
+      eventAt: expect.any(Number) as number,
+      arrivedAt: expect.any(Number) as number,
+    });
     expect(claimed.result.result_source).toBe('synchronous');
+  });
+
+  it("records the claim as the sims' latest event and plays a prefetched scene with its claim time", async () => {
+    const { ctx, ai, play, sceneFreshness } = makeContext();
+    const queue = new GenerationQueueService(ctx);
+    const request = { correlation_id: 'sim:1', event: event('one') };
+    await queue.prefetch(request);
+    await vi.waitFor(() => {
+      expect(ai.interactionEventDeferred).toHaveBeenCalledOnce();
+    });
+
+    const before = Date.now();
+    const claim = await queue.claim(request);
+    claim.play();
+
+    expect(sceneFreshness.recordEvent).toHaveBeenCalledWith([], expect.any(Number));
+    expect(play).toHaveBeenCalledOnce();
+    const claimedAt = play.mock.calls[0][0] as number;
+    expect(claimedAt).toBeGreaterThanOrEqual(before);
   });
 
   it('cancels an unclaimed completed result without playing it', async () => {

@@ -7,8 +7,11 @@ import {
   elevenLabsLineText,
   isElevenLabsV3,
   isElevenLabsV4,
+  ndjsonTimestampChunks,
+  parseTimestampsJson,
+  resolvedVoiceSettings,
+  snapStabilityForModel,
   supportsAudioTags,
-  supportsSpeechContext,
   usesDialogueEndpoint,
 } from 'main/sentient-sims/clients/ElevenLabsTTSRequest';
 import {
@@ -25,6 +28,9 @@ import { DialogueLine } from 'main/sentient-sims/formatter/PromptFormatter';
 import { defaultElevenLabsEndpoint } from 'main/sentient-sims/constants';
 
 const rachelVoiceId = '21m00Tcm4TlvDq8ikWAM';
+const defaultStability = defaultElevenLabsVoiceSettings.stability as number;
+const defaultSimilarity = defaultElevenLabsVoiceSettings.similarity_boost as number;
+const ttsQuery = `?output_format=${defaultElevenLabsTTSSettings.output_format}`;
 
 function settings(overrides?: Partial<ElevenLabsTTSSettings>): ElevenLabsTTSSettings {
   return { ...defaultElevenLabsTTSSettings, ...overrides };
@@ -89,12 +95,66 @@ describe('ElevenLabs speech model', () => {
     expect(defaultElevenLabsVoiceSettings.speed).toBeGreaterThanOrEqual(0.7);
     expect(defaultElevenLabsVoiceSettings.speed).toBeLessThanOrEqual(1.2);
   });
+
+  it('defaults to real stability and similarity, not the 0/0 corner', () => {
+    expect(defaultStability).toBeGreaterThan(0);
+    expect(defaultStability).toBeLessThanOrEqual(1);
+    expect(defaultSimilarity).toBeGreaterThan(0);
+    expect(defaultSimilarity).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('resolvedVoiceSettings', () => {
+  it('returns what the user stored', () => {
+    const resolved = resolvedVoiceSettings(
+      settings({
+        voice_settings: { stability: 0.6, similarity_boost: 0.2, style: 0.1, use_speaker_boost: false, speed: 0.9 },
+      }),
+    );
+    expect(resolved).toEqual({
+      stability: 0.6,
+      similarity_boost: 0.2,
+      style: 0.1,
+      use_speaker_boost: false,
+      speed: 0.9,
+    });
+  });
+
+  it('treats a stored object with no stability as legacy: both sliders get the defaults', () => {
+    // What every pre-slider install has on disk: the old default's similarity_boost 0,
+    // never chosen by anyone
+    const resolved = resolvedVoiceSettings(
+      settings({ voice_settings: { similarity_boost: 0, style: 0, use_speaker_boost: true, speed: 1.1 } }),
+    );
+    expect(resolved.stability).toEqual(defaultStability);
+    expect(resolved.similarity_boost).toEqual(defaultSimilarity);
+    expect(resolved.speed).toEqual(1.1);
+  });
+
+  it('fills everything from the defaults when nothing is stored', () => {
+    expect(resolvedVoiceSettings({ ...defaultElevenLabsTTSSettings, voice_settings: undefined })).toEqual(
+      defaultElevenLabsVoiceSettings,
+    );
+  });
+});
+
+describe('snapStabilityForModel', () => {
+  it('snaps v3 stability to Creative, Natural or Robust', () => {
+    expect(snapStabilityForModel(0.35, 'eleven_v3')).toEqual(0.5);
+    expect(snapStabilityForModel(0.2, 'eleven_v3_conversational')).toEqual(0);
+    expect(snapStabilityForModel(0.8, 'eleven_v3')).toEqual(1);
+  });
+
+  it('leaves every other model alone', () => {
+    expect(snapStabilityForModel(0.35, 'eleven_v4')).toEqual(0.35);
+    expect(snapStabilityForModel(0.35, 'eleven_flash_v2_5')).toEqual(0.35);
+  });
 });
 
 describe('buildElevenLabsSpeechRequest', () => {
   it('targets the voice on the text-to-speech endpoint', () => {
     const request = buildRequest('Hello there.', rachelVoiceId, settings());
-    expect(request.url).toEqual(`${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}`);
+    expect(request.url).toEqual(`${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}${ttsQuery}`);
     expect(request.headers['xi-api-key']).toEqual('test-key');
     expect(request.headers['Content-Type']).toEqual('application/json');
   });
@@ -137,7 +197,7 @@ describe('buildElevenLabsSpeechRequest', () => {
 
   it('sends no speed on v4, which has no speed setting', () => {
     const request = buildRequest('Hello there.', rachelVoiceId, settings({ model: ElevenLabsSpeechModel.ELEVEN_V4 }));
-    expect(request.body.voice_settings).toEqual({ stability: 0, similarity_boost: 0 });
+    expect(request.body.voice_settings).toEqual({ stability: defaultStability, similarity_boost: defaultSimilarity });
     expect('speed' in request.body.voice_settings).toBe(false);
 
     const turbo = buildRequest(
@@ -151,6 +211,100 @@ describe('buildElevenLabsSpeechRequest', () => {
   it('keeps sending speed on flash', () => {
     const request = buildRequest('Hello there.', rachelVoiceId, settings());
     expect(request.body.voice_settings.speed).toEqual(defaultElevenLabsVoiceSettings.speed);
+  });
+
+  it('sends the stored stability and similarity', () => {
+    const request = buildRequest(
+      'Hello there.',
+      rachelVoiceId,
+      settings({ voice_settings: { ...defaultElevenLabsVoiceSettings, stability: 0.7, similarity_boost: 0.4 } }),
+    );
+    expect(request.body.voice_settings.stability).toEqual(0.7);
+    expect(request.body.voice_settings.similarity_boost).toEqual(0.4);
+  });
+
+  it('applies the new defaults to a legacy stored object instead of its similarity 0', () => {
+    const request = buildRequest(
+      'Hello there.',
+      rachelVoiceId,
+      settings({ voice_settings: { similarity_boost: 0, style: 0, use_speaker_boost: true, speed: 1.2 } }),
+    );
+    expect(request.body.voice_settings.stability).toEqual(defaultStability);
+    expect(request.body.voice_settings.similarity_boost).toEqual(defaultSimilarity);
+  });
+
+  it('sends style and speaker boost on the v2-era models only', () => {
+    const flash = buildRequest('Hello there.', rachelVoiceId, settings());
+    expect(flash.body.voice_settings.style).toEqual(defaultElevenLabsVoiceSettings.style);
+    expect(flash.body.voice_settings.use_speaker_boost).toEqual(true);
+
+    const multilingual = buildRequest(
+      'Hello there.',
+      rachelVoiceId,
+      settings({ model: ElevenLabsSpeechModel.ELEVEN_MULTILINGUAL_V2 }),
+    );
+    expect('style' in multilingual.body.voice_settings).toBe(true);
+
+    const v3 = buildRequest('Hello there.', rachelVoiceId, settings({ model: ElevenLabsSpeechModel.ELEVEN_V3 }));
+    expect('style' in v3.body.voice_settings).toBe(false);
+    expect('use_speaker_boost' in v3.body.voice_settings).toBe(false);
+
+    const v4 = buildRequest('Hello there.', rachelVoiceId, settings({ model: ElevenLabsSpeechModel.ELEVEN_V4 }));
+    expect('style' in v4.body.voice_settings).toBe(false);
+    expect('use_speaker_boost' in v4.body.voice_settings).toBe(false);
+  });
+
+  it('snaps stability to a v3 preset on v3 only', () => {
+    const v3 = buildRequest('Hello there.', rachelVoiceId, settings({ model: ElevenLabsSpeechModel.ELEVEN_V3 }));
+    expect([0, 0.5, 1]).toContain(v3.body.voice_settings.stability);
+
+    const v4 = buildRequest('Hello there.', rachelVoiceId, settings({ model: ElevenLabsSpeechModel.ELEVEN_V4 }));
+    expect(v4.body.voice_settings.stability).toEqual(defaultStability);
+  });
+
+  it('sends at most the last three previous_request_ids, and none when there are none', () => {
+    const none = buildRequest('Hello there.', rachelVoiceId, settings());
+    expect('previous_request_ids' in none.body).toBe(false);
+
+    const stitched = buildElevenLabsSpeechRequest({
+      text: 'Hello there.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: settings(),
+      previousRequestIds: ['a', 'b', 'c', 'd'],
+    });
+    expect(stitched.body.previous_request_ids).toEqual(['b', 'c', 'd']);
+  });
+
+  it('drops previous_text when stitching ids are sent: the API takes one or the other', () => {
+    // 2026-10-05: both together got a 400 on the second chunk of every long reply
+    const stitched = buildElevenLabsSpeechRequest({
+      text: 'Never caught a thing, mind you.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: settings(),
+      previousText: 'Been fishing here for years.',
+      nextText: 'Come in, then.',
+      previousRequestIds: ['a'],
+    });
+    expect(stitched.body.previous_request_ids).toEqual(['a']);
+    expect('previous_text' in stitched.body).toBe(false);
+    expect(stitched.body.next_text).toEqual('Come in, then.');
+
+    // Blank ids are not stitching, so the text stays
+    const unstitched = buildElevenLabsSpeechRequest({
+      text: 'Never caught a thing, mind you.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: settings(),
+      previousText: 'Been fishing here for years.',
+      previousRequestIds: ['', ''],
+    });
+    expect(unstitched.body.previous_text).toEqual('Been fishing here for years.');
+    expect('previous_request_ids' in unstitched.body).toBe(false);
   });
 
   it('omits previous_text and next_text unless given', () => {
@@ -173,27 +327,6 @@ describe('buildElevenLabsSpeechRequest', () => {
     expect(request.body.next_text).toEqual('Come in, then.');
   });
 
-  it('drops previous_text and next_text on v3, which the API rejects them for', () => {
-    expect(supportsSpeechContext(ElevenLabsSpeechModel.ELEVEN_V3)).toBe(false);
-    expect(supportsSpeechContext(ElevenLabsSpeechModel.ELEVEN_V3_CONVERSATIONAL)).toBe(false);
-    expect(supportsSpeechContext(ElevenLabsSpeechModel.ELEVEN_FLASH_V2_5)).toBe(true);
-    expect(supportsSpeechContext(ElevenLabsSpeechModel.ELEVEN_MULTILINGUAL_V2)).toBe(true);
-
-    [ElevenLabsSpeechModel.ELEVEN_V3, ElevenLabsSpeechModel.ELEVEN_V3_CONVERSATIONAL].forEach((model) => {
-      const request = buildElevenLabsSpeechRequest({
-        text: 'Hello there.',
-        voiceId: rachelVoiceId,
-        endpoint: defaultElevenLabsEndpoint,
-        apiKey: 'test-key',
-        settings: settings({ model }),
-        previousText: 'Who goes there?',
-        nextText: 'Come in, then.',
-      });
-      expect('previous_text' in request.body).toBe(false);
-      expect('next_text' in request.body).toBe(false);
-    });
-  });
-
   it('targets /stream when asked to', () => {
     const request = buildElevenLabsSpeechRequest({
       text: 'Hello there.',
@@ -203,14 +336,103 @@ describe('buildElevenLabsSpeechRequest', () => {
       settings: settings(),
       stream: true,
     });
-    expect(request.url).toEqual(`${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}/stream`);
+    expect(request.url).toEqual(`${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}/stream${ttsQuery}`);
+  });
+
+  it('sends no context on v3, which the API rejects with a 400', () => {
+    const request = buildElevenLabsSpeechRequest({
+      text: 'Hello there.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: settings({ model: ElevenLabsSpeechModel.ELEVEN_V3 }),
+      previousText: 'Who goes there?',
+      nextText: 'Come in, then.',
+    });
+    expect(request.body.previous_text).toBeUndefined();
+    expect(request.body.next_text).toBeUndefined();
+  });
+
+  it('targets the with-timestamps variants, buffered and streamed', () => {
+    const base = {
+      text: 'Hello there.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: settings(),
+    };
+    expect(buildElevenLabsSpeechRequest({ ...base, timestamps: true }).url).toEqual(
+      `${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}/with-timestamps?output_format=mp3_44100_128`,
+    );
+    expect(buildElevenLabsSpeechRequest({ ...base, stream: true, timestamps: true }).url).toEqual(
+      `${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}/stream/with-timestamps?output_format=mp3_44100_128`,
+    );
+  });
+});
+
+describe('with-timestamps responses', () => {
+  const alignment = {
+    characters: ['H', 'i'],
+    character_start_times_seconds: [0, 0.2],
+    character_end_times_seconds: [0.2, 0.4],
+  };
+
+  it('parses the audio bytes and prefers the alignment of the text as sent', () => {
+    const chunk = parseTimestampsJson({
+      audio_base64: 'AQID',
+      alignment,
+      normalized_alignment: { ...alignment, characters: ['h', 'i'] },
+    });
+    expect(Array.from(chunk.bytes)).toEqual([1, 2, 3]);
+    expect(chunk.alignment?.characters).toEqual(['H', 'i']);
+  });
+
+  it('falls back to the normalized alignment, and to none', () => {
+    expect(parseTimestampsJson({ audio_base64: 'AQID', normalized_alignment: alignment }).alignment).toEqual(alignment);
+    const bare = parseTimestampsJson({ audio_base64: 'AQID' });
+    expect(bare.alignment).toBeNull();
+    expect(parseTimestampsJson(null).bytes).toHaveLength(0);
+  });
+
+  it('splits a newline-delimited stream into chunks, the last line without a newline too', async () => {
+    const lines = [
+      JSON.stringify({ audio_base64: 'AQ==', alignment }),
+      'not json',
+      JSON.stringify({ audio_base64: 'Ag==', alignment: null }),
+    ];
+    const body = new TextEncoder().encode(`${lines[0]}\n${lines[1]}\n${lines[2]}`);
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // split mid-object to prove buffering across reads
+        controller.enqueue(body.slice(0, 20));
+        controller.enqueue(body.slice(20));
+        controller.close();
+      },
+    });
+    const reader = source.pipeThrough(ndjsonTimestampChunks()).getReader();
+    const chunks = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    expect(chunks).toHaveLength(2);
+    expect(Array.from(chunks[0].bytes)).toEqual([1]);
+    expect(chunks[0].alignment?.characters).toEqual(['H', 'i']);
+    expect(Array.from(chunks[1].bytes)).toEqual([2]);
+    expect(chunks[1].alignment).toBeNull();
   });
 });
 
 describe('buildElevenLabsDialogueRequest', () => {
   const v4 = settings({ model: ElevenLabsSpeechModel.ELEVEN_V4 });
 
-  function buildDialogue(overrides?: { previousText?: string; nextText?: string; stream?: boolean }) {
+  function buildDialogue(overrides?: {
+    previousText?: string;
+    nextText?: string;
+    stream?: boolean;
+    timestamps?: boolean;
+  }) {
     return buildElevenLabsDialogueRequest({
       text: '[nervous] Been fishing here for years.',
       voiceId: rachelVoiceId,
@@ -237,13 +459,66 @@ describe('buildElevenLabsDialogueRequest', () => {
     );
   });
 
+  it('targets the with-timestamps variants before the query string', () => {
+    expect(buildDialogue({ timestamps: true }).url).toEqual(
+      `${defaultElevenLabsEndpoint}/text-to-dialogue/with-timestamps?output_format=${defaultElevenLabsTTSSettings.output_format}`,
+    );
+    expect(buildDialogue({ stream: true, timestamps: true }).url).toEqual(
+      `${defaultElevenLabsEndpoint}/text-to-dialogue/stream/with-timestamps?output_format=${defaultElevenLabsTTSSettings.output_format}`,
+    );
+  });
+
   it('sends one voiced input, the model, and dialogue-style settings without speed', () => {
     const request = buildDialogue();
     expect(request.body.inputs).toEqual([{ text: '[nervous] Been fishing here for years.', voice_id: rachelVoiceId }]);
     expect(request.body.model_id).toEqual('eleven_v4');
-    expect(request.body.settings).toEqual({ stability: 0, similarity: 0 });
+    expect(request.body.settings).toEqual({ stability: defaultStability, similarity: defaultSimilarity });
     expect('similarity_boost' in request.body.settings).toBe(false);
     expect(JSON.stringify(request.body)).not.toContain('speed');
+    expect(JSON.stringify(request.body)).not.toContain('style');
+  });
+
+  it('sends the stored stability and similarity as dialogue settings', () => {
+    const request = buildElevenLabsDialogueRequest({
+      text: 'Hello there.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: settings({
+        model: ElevenLabsSpeechModel.ELEVEN_V4,
+        voice_settings: { ...defaultElevenLabsVoiceSettings, stability: 0.5, similarity_boost: 0.9 },
+      }),
+    });
+    expect(request.body.settings).toEqual({ stability: 0.5, similarity: 0.9 });
+  });
+
+  it('sends at most the last three previous_request_ids', () => {
+    expect('previous_request_ids' in buildDialogue().body).toBe(false);
+    const stitched = buildElevenLabsDialogueRequest({
+      text: 'Hello there.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: v4,
+      previousRequestIds: ['a', 'b', 'c', 'd'],
+    });
+    expect(stitched.body.previous_request_ids).toEqual(['b', 'c', 'd']);
+  });
+
+  it('drops previous_text when stitching ids are sent, and keeps future_text', () => {
+    const stitched = buildElevenLabsDialogueRequest({
+      text: 'Never caught a thing, mind you.',
+      voiceId: rachelVoiceId,
+      endpoint: defaultElevenLabsEndpoint,
+      apiKey: 'test-key',
+      settings: v4,
+      previousText: 'Been fishing here for years.',
+      nextText: 'Come in, then.',
+      previousRequestIds: ['a'],
+    });
+    expect(stitched.body.previous_request_ids).toEqual(['a']);
+    expect('previous_text' in stitched.body).toBe(false);
+    expect(stitched.body.future_text).toEqual('Come in, then.');
   });
 
   it('omits context unless given', () => {
@@ -290,7 +565,7 @@ describe('buildElevenLabsLineRequest', () => {
 
   it('picks text-to-speech for everything else', () => {
     const request = buildElevenLabsLineRequest({ ...params, settings: settings({ model: 'eleven_v3' }) });
-    expect(request.url).toEqual(`${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}`);
+    expect(request.url).toEqual(`${defaultElevenLabsEndpoint}/text-to-speech/${rachelVoiceId}${ttsQuery}`);
     expect('text' in request.body).toBe(true);
   });
 });
@@ -455,6 +730,17 @@ describe('elevenLabsLineText', () => {
     expect(elevenLabsLineText(line, ElevenLabsSpeechModel.ELEVEN_V4_TURBO)).toEqual(
       '[nervous] Been fishing here for years.',
     );
+  });
+
+  it('reads ttsText over text when a line carries one, tag included', () => {
+    const phonetic: DialogueLine = {
+      speaker: 'Ricky',
+      text: 'Zorvath!',
+      ttsText: '/ˈzɔːrvæθ/!',
+      deliveryNote: 'excited',
+    };
+    expect(elevenLabsLineText(phonetic, ElevenLabsSpeechModel.ELEVEN_V4)).toEqual('[excited] /ˈzɔːrvæθ/!');
+    expect(elevenLabsLineText(phonetic, ElevenLabsSpeechModel.ELEVEN_FLASH_V2_5)).toEqual('/ˈzɔːrvæθ/!');
   });
 
   it('leaves a line without a delivery note alone on v3', () => {

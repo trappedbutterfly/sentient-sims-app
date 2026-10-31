@@ -11,6 +11,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Slider,
   Stack,
   TextField,
   Typography,
@@ -21,6 +22,7 @@ import {
   defaultElevenLabsTTSSettings,
   ElevenLabsSpeechModel,
   ElevenLabsTTSSettings,
+  ElevenLabsVoiceSettings,
   toSpeechModel,
 } from 'main/sentient-sims/models/ElevenLabsTTSSettings';
 import { SettingsEnum } from 'main/sentient-sims/models/SettingsEnum';
@@ -30,7 +32,11 @@ import useSetting from 'renderer/hooks/useSetting';
 import handleOpenExternalLink from 'renderer/hooks/handleOpenExternalLink';
 import { useTTS } from 'renderer/providers/AudioContextProvider';
 import { ElevenLabsVoiceInfo } from 'main/sentient-sims/clients/ElevenLabsVoiceRequest';
-import { isElevenLabsV4, supportsAudioTags } from 'main/sentient-sims/clients/ElevenLabsTTSRequest';
+import {
+  isElevenLabsV4,
+  resolvedVoiceSettings,
+  supportsAudioTags,
+} from 'main/sentient-sims/clients/ElevenLabsTTSRequest';
 import { useElevenLabsVoiceInfo } from 'renderer/voice/useElevenLabsVoiceInfo';
 import { ElevenLabsKeySetup } from './ElevenLabsKeySetup';
 
@@ -99,6 +105,10 @@ export function ElevenLabsVoiceSettingsComponent() {
   // Keeps the card from describing a voice the user has already typed away from
   const loadedVoice = voiceInfo.voice?.voiceId === elevenLabsTTSSettings.value.voice ? voiceInfo.voice : undefined;
 
+  // What the sliders show: the stored values with legacy gaps filled, exactly what the
+  // request builder sends
+  const voiceSettings = resolvedVoiceSettings(elevenLabsTTSSettings.value);
+  const isV4 = isElevenLabsV4(elevenLabsTTSSettings.value.model);
   const moodTagsOn = elevenLabsTTSSettings.value.moodTags ?? true;
 
   function handleModelChange(model: string) {
@@ -112,6 +122,15 @@ export function ElevenLabsVoiceSettingsComponent() {
     void elevenLabsTTSSettings.setSetting({
       ...elevenLabsTTSSettings.value,
       voice: voice.trim(),
+    });
+  }
+
+  // Writes the WHOLE resolved object so a legacy stored object (no stability) becomes a
+  // current one on the first slider move, instead of staying legacy for the other slider
+  function handleVoiceSettingChange(change: Partial<ElevenLabsVoiceSettings>) {
+    void elevenLabsTTSSettings.setSetting({
+      ...elevenLabsTTSSettings.value,
+      voice_settings: { ...voiceSettings, ...change },
     });
   }
 
@@ -206,6 +225,58 @@ export function ElevenLabsVoiceSettingsComponent() {
         </Box>
       ) : null}
       {loadedVoice ? <ElevenLabsVoiceCard voice={loadedVoice} /> : null}
+      <Box sx={{ marginBottom: 1 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          Stability: {voiceSettings.stability.toFixed(2)}
+        </Typography>
+        <Slider
+          size="small"
+          min={0}
+          max={1}
+          step={0.05}
+          value={voiceSettings.stability}
+          onChange={(_event, value) => {
+            handleVoiceSettingChange({ stability: value });
+          }}
+        />
+        <FormHelperText sx={{ marginTop: -1 }}>
+          Lower is more expressive, higher is steadier. v3 snaps to Creative (0), Natural (0.5) or Robust (1).
+        </FormHelperText>
+      </Box>
+      <Box sx={{ marginBottom: 1 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          Similarity: {voiceSettings.similarity_boost.toFixed(2)}
+        </Typography>
+        <Slider
+          size="small"
+          min={0}
+          max={1}
+          step={0.05}
+          value={voiceSettings.similarity_boost}
+          onChange={(_event, value) => {
+            handleVoiceSettingChange({ similarity_boost: value });
+          }}
+        />
+        <FormHelperText sx={{ marginTop: -1 }}>How closely the read sticks to the original voice.</FormHelperText>
+      </Box>
+      {isV4 ? null : (
+        <Box sx={{ marginBottom: 1 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Speed: {voiceSettings.speed.toFixed(2)}
+          </Typography>
+          <Slider
+            size="small"
+            min={0.7}
+            max={1.2}
+            step={0.05}
+            value={voiceSettings.speed}
+            onChange={(_event, value) => {
+              handleVoiceSettingChange({ speed: value });
+            }}
+          />
+          <FormHelperText sx={{ marginTop: -1 }}>Not available on Eleven v4.</FormHelperText>
+        </Box>
+      )}
       <Box sx={{ marginBottom: 2 }}>
         <FormControlLabel
           control={

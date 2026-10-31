@@ -97,14 +97,23 @@ describe('renderKnownFacts', () => {
   it('names the people the sim lives with, not just the household', () => {
     // Live 2026-09-03: asked who she lived with, Summer answered "BFF" - the household name
     // was the only name anywhere in her prompt
-    expect(render()).toContain('you live with Travis Scott, Mackenzie Scott and Ariel Scott (the BFF household)');
+    expect(render()).toContain('you live with Travis Scott, Mackenzie Scott and Ariel Scott');
   });
 
-  it('falls back to the household name when the members are unknown', () => {
+  it('says where the sim lives before anything else', () => {
+    const block = render({
+      selfFacts: [...summerFacts, fact(FactPredicate.HOME, 'Inner Circle, Mirage Park, Del Sol Valley')],
+    });
+    expect(block).toContain('About you:\n- your home is Inner Circle, Mirage Park, Del Sol Valley\n');
+  });
+
+  it('never names the household, and says a sim with no housemates lives alone', () => {
+    expect(render()).not.toContain('BFF');
     const block = render({
       selfFacts: [fact(FactPredicate.HOUSEHOLD, 'BFF')],
     });
-    expect(block).toContain('you live with the BFF household');
+    expect(block).toContain('- you live alone');
+    expect(block).not.toContain('BFF');
   });
 
   it('says a life stage the way a person says it', () => {
@@ -283,7 +292,7 @@ describe('renderKnownFacts', () => {
       names: { ...names, '700': 'Bosun' },
       species: { '700': 'DOG' },
     });
-    expect(block).toContain('you live with Travis Scott, Mackenzie Scott and Ariel Scott (the BFF household)');
+    expect(block).toContain('you live with Travis Scott, Mackenzie Scott and Ariel Scott');
     expect(block).toContain('- your pet: Bosun the dog');
     expect(block).not.toContain('Ariel Scott and Bosun');
   });

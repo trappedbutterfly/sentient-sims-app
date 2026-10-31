@@ -107,6 +107,10 @@ export function sceneLineReadingHoldMs(text: string): number {
 // starting new AI calls past this point so a classic single-call fallback still fits.
 export const directedSceneBudgetMs = 50_000;
 
+// A scene whose game event is older than this when it would start generating or airing
+// is stale: the game has moved on. Round 1 only; later rounds are judged by what the game
+// has done since (SceneFreshness).
+export const defaultSceneEventMaxAgeMs = 60_000;
 // A request the game is blocked on has this long from reaching the queue, whatever it waited
 // behind, before the mod gives up on it at 80 seconds
 export const interactionDeadlineMs = 70_000;
@@ -260,8 +264,14 @@ export const openrouterDefaultTranscriptionModel = openrouterTranscriptionModels
 // Gemini has no dedicated speech endpoint: a text model is handed the audio inline.
 export const geminiTranscriptionModels = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
 export const geminiDefaultTranscriptionModel = geminiTranscriptionModels[0];
-export const defaultVoiceInputHotkey = 'Ctrl+Space';
-// macOS takes Ctrl+Space to switch input sources before the game ever sees it
+// ElevenLabs Scribe, the speech-to-text behind the Voices key; takes the names in play as keyterms.
+export const elevenLabsTranscriptionModels = ['scribe_v2', 'scribe_v1'];
+export const elevenLabsDefaultTranscriptionModel = elevenLabsTranscriptionModels[0];
+// No Space in a voice chord: The Sims 4 binds Space, and the overlay only observes keys
+export const defaultVoiceInputHotkey = 'Ctrl+S';
+// The old Windows default; runMigrations moves a store still holding it to the current one
+export const formerDefaultVoiceInputHotkey = 'Ctrl+Space';
+// macOS takes Ctrl+Space to switch input sources, and leaves Opt+V to the game
 export const defaultVoiceInputHotkeyMac = 'Alt+V';
 export function defaultVoiceInputHotkeyFor(isMac: boolean): string {
   return isMac ? defaultVoiceInputHotkeyMac : defaultVoiceInputHotkey;
@@ -277,7 +287,6 @@ export const defaultTwitchCommandWord = '!say';
 // Voice the app speaks viewer !ask questions with when none is configured (ElevenLabs
 // premade "Charlie": energetic, casual — distinct from the drama-cast sim voices)
 export const defaultTwitchChatVoiceId = 'IKne3meq5aSn9XLyUdCD';
-
 // A sim's inner voice is only written down when the salience stage says the moment was
 // worth remembering. Every tick used to file its monologue as a row, which buried the
 // Memories window — and the sim's own recall — under forgettable inner voice ("I should
@@ -286,3 +295,4 @@ export const defaultTwitchChatVoiceId = 'IKne3meq5aSn9XLyUdCD';
 // Shared by the cognition tick and the solo directed scene, which are two routes to the
 // same thing — a sim thinking to herself.
 export const thoughtMemoryFloor = 4;
+

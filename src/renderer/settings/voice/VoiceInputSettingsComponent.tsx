@@ -343,24 +343,27 @@ export default function VoiceInputSettingsComponent() {
   const openaiKey = useSetting<string>(SettingsEnum.OPENAI_KEY, '');
   const openrouterKey = useSetting<string>(SettingsEnum.OPENROUTER_KEY, '');
   const geminiKeys = useSetting<string>(SettingsEnum.GEMINI_KEYS, '');
+  const elevenLabsKey = useSetting<string>(SettingsEnum.ELEVENLABS_KEY, '');
   const hotkey = useSetting<string>(SettingsEnum.VOICE_INPUT_HOTKEY, defaultVoiceInputHotkeyFor(isMac));
   const language = useSetting<string>(SettingsEnum.VOICE_INPUT_LANGUAGE, '');
 
   const provider = voiceInputProviderFromValue(providerSetting.value);
   const hotkeyPresets = voiceHotkeyPresets(isMac, hotkey.value);
 
-  // The main AI settings hold the key each hosted provider signs its requests with
-  const providerKeys: Partial<Record<VoiceInputProvider, { set: boolean; label: string }>> = {
-    [ApiType.OpenAI]: { set: openaiKey.value.trim() !== '', label: 'OpenAI key' },
-    [ApiType.OpenRouter]: { set: openrouterKey.value.trim() !== '', label: 'OpenRouter key' },
-    [ApiType.Gemini]: { set: geminiKeys.value.trim() !== '', label: 'Gemini key' },
+  // The main AI settings hold the key each hosted provider signs its requests with;
+  // Scribe signs with the ElevenLabs key from the Voices settings
+  const providerKeys: Partial<Record<VoiceInputProvider, { set: boolean; label: string; where: string }>> = {
+    [ApiType.OpenAI]: { set: openaiKey.value.trim() !== '', label: 'OpenAI key', where: 'AI settings' },
+    [ApiType.OpenRouter]: { set: openrouterKey.value.trim() !== '', label: 'OpenRouter key', where: 'AI settings' },
+    [ApiType.Gemini]: { set: geminiKeys.value.trim() !== '', label: 'Gemini key', where: 'AI settings' },
+    [ApiType.ElevenLabs]: { set: elevenLabsKey.value.trim() !== '', label: 'ElevenLabs key', where: 'Voices' },
   };
   const providerKey = providerKeys[provider];
   let providerKeyHelp: string | undefined;
   if (providerKey) {
     providerKeyHelp = providerKey.set
-      ? `Uses your ${providerKey.label} from the AI settings.`
-      : `Add your ${providerKey.label} under AI settings first.`;
+      ? `Uses your ${providerKey.label} from the ${providerKey.where} settings.`
+      : `Add your ${providerKey.label} under ${providerKey.where} settings first.`;
   }
   const providerModel = provider === customVoiceInputProvider ? model.value : (models.value[provider] ?? '');
   const setProviderModel = (value: string) => {
@@ -410,6 +413,18 @@ export default function VoiceInputSettingsComponent() {
           </Stack>
           {provider === ApiType.SentientSimsAI ? (
             <FormHelperText>Uses your Sentient Sims AI login. No endpoint, key or model is needed.</FormHelperText>
+          ) : null}
+          {provider === ApiType.ElevenLabs ? (
+            <FormHelperText>
+              Your Sims&apos; names are sent along as spellings the model should prefer, so unusual names come out
+              right. ElevenLabs bills transcription per second of audio, with a 20% surcharge for the name list.
+            </FormHelperText>
+          ) : null}
+          {provider === ApiType.ElevenLabs ? (
+            <FormHelperText>
+              Your Sims&apos; names are sent along as spellings the model should prefer, so unusual names come out
+              right. ElevenLabs bills transcription per second of audio, with a 20% surcharge for the name list.
+            </FormHelperText>
           ) : null}
           {provider === customVoiceInputProvider ? (
             <>
@@ -481,7 +496,8 @@ export default function VoiceInputSettingsComponent() {
           <FormHelperText>
             Hold the hotkey while the game is focused, speak, and release — your words become your active Sim&apos;s
             spoken line to whoever they&apos;re talking to. The game&apos;s overlay listens for the key, so it works
-            only while the game window is focused and the overlay is loaded; no system permission is needed.
+            only while the game window is focused and the overlay is loaded; no system permission is needed. (Change
+            hotkey with the Hotkey setting above)
           </FormHelperText>
         </Stack>
       ) : null}

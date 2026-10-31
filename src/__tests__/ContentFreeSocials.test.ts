@@ -5,8 +5,8 @@ import {
   withContentFreeHint,
 } from 'main/sentient-sims/pipeline/prompts/scene';
 
-// J6 (the 2026-09-04 playtest handoff, cause 6): mixer_social_InsideJoke gave the model nothing to
-// joke about, so Margo produced "Remember that time you got stuck in the snowbank" and it
+// J6 (Jaz's 09-04 handoff, cause 6): mixer_social_InsideJoke gave the model nothing to
+// joke about, so Margo produced "Remember that time Jaz got stuck in the snowbank" and it
 // replayed into 137 later prompt lines. The pre-action for a content-free social now says
 // where the material may come from; every other interaction is untouched.
 describe('content-free social hint', () => {

@@ -40,7 +40,7 @@ export function isRomanceAge(age: string | undefined): boolean {
   return age !== undefined && ROMANCE_AGES.has(age.trim().toUpperCase());
 }
 
-// J8 (the 2026-09-04 playtest handoff, cause 8): babies, infants and toddlers wrote diaries and ran
+// J8 (Jaz's 09-04 handoff, cause 8): babies, infants and toddlers wrote diaries and ran
 // Action Scenes that could not produce an option (five paid round trips ending in "no
 // valid options"). Below CHILD there is no inner life to narrate and no verb to pick.
 // Unlike romance this fails OPEN: an unknown age is not a reason to silence a Sim.

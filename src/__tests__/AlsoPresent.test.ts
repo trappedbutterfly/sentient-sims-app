@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ALSO_PRESENT_RULE, buildAlsoPresentBlock, speciesWord } from 'main/sentient-sims/util/alsoPresent';
 import { SimStateReport } from 'main/sentient-sims/models/SimStateReport';
 
-// J3 (the 2026-09-04 playtest handoff, cause 3): asked which cats were on the lot, Wren invented Luna
+// J3 (Jaz's 09-04 handoff, cause 3): asked which cats were on the lot, Wren invented Luna
 // and Leo because the prompt listed nobody but her. The roster comes from the state
 // report; a Sim on another lot never appears; an empty cache renders nothing at all.
 describe('<ALSO_PRESENT>', () => {

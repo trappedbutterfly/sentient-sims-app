@@ -1,4 +1,4 @@
-// J3 (the 2026-09-04 playtest handoff, cause 3): the scene and ask prompts listed only the Sims in
+// J3 (Jaz's 09-04 handoff, cause 3): the scene and ask prompts listed only the Sims in
 // the event, so "which cats are here?" had no roster to answer from and the model
 // supplied Luna and Leo - one a dog on another lot, one nobody. The state report already
 // knows who is on the lot (every reported Sim plus everyone they perceive in the room),

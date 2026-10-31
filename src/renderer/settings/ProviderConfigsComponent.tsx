@@ -95,7 +95,6 @@ type CapabilityDefinition = {
 const OVERRIDE_ACTION_TYPES = AllAIActionTypes.filter(
   (action) => !TIER_ACTION_TYPES.includes(action) || rendererTiers.overrideActionTypes.includes(action),
 );
-
 const CAPABILITIES: Record<ProviderCapability, CapabilityDefinition> = {
   text: {
     title: 'AI Model',

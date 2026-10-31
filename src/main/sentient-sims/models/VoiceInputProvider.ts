@@ -1,5 +1,7 @@
 import {
   defaultVoiceInputModel,
+  elevenLabsDefaultTranscriptionModel,
+  elevenLabsTranscriptionModels,
   geminiDefaultTranscriptionModel,
   geminiTranscriptionModels,
   openaiDefaultEndpoint,
@@ -16,6 +18,7 @@ export const customVoiceInputProvider = 'custom';
 
 export type VoiceInputProvider =
   | ApiType.SentientSimsAI
+  | ApiType.ElevenLabs
   | ApiType.OpenAI
   | ApiType.OpenRouter
   | ApiType.Gemini
@@ -23,6 +26,7 @@ export type VoiceInputProvider =
 
 export const voiceInputProviders: VoiceInputProvider[] = [
   ApiType.SentientSimsAI,
+  ApiType.ElevenLabs,
   ApiType.OpenAI,
   ApiType.OpenRouter,
   ApiType.Gemini,
@@ -41,6 +45,8 @@ export function voiceInputProviderFromValue(value: unknown, endpoint?: string): 
       return ApiType.OpenRouter;
     case ApiType.Gemini:
       return ApiType.Gemini;
+    case ApiType.ElevenLabs:
+      return ApiType.ElevenLabs;
     case customVoiceInputProvider:
       return customVoiceInputProvider;
     default:
@@ -49,7 +55,14 @@ export function voiceInputProviderFromValue(value: unknown, endpoint?: string): 
 }
 
 export function voiceInputProviderName(provider: VoiceInputProvider): string {
-  return provider === customVoiceInputProvider ? 'OpenAI-compatible endpoint' : ApiTypeName(provider);
+  switch (provider) {
+    case customVoiceInputProvider:
+      return 'OpenAI-compatible endpoint';
+    case ApiType.ElevenLabs:
+      return 'ElevenLabs Scribe';
+    default:
+      return ApiTypeName(provider);
+  }
 }
 
 // Sentient Sims AI picks its own model server side
@@ -61,6 +74,8 @@ export function defaultVoiceInputModelFor(provider: VoiceInputProvider): string 
       return openrouterDefaultTranscriptionModel;
     case ApiType.Gemini:
       return geminiDefaultTranscriptionModel;
+    case ApiType.ElevenLabs:
+      return elevenLabsDefaultTranscriptionModel;
     case customVoiceInputProvider:
       return defaultVoiceInputModel;
     default:
@@ -76,6 +91,8 @@ export function voiceInputModelSuggestions(provider: VoiceInputProvider): string
       return openrouterTranscriptionModels;
     case ApiType.Gemini:
       return geminiTranscriptionModels;
+    case ApiType.ElevenLabs:
+      return elevenLabsTranscriptionModels;
     case customVoiceInputProvider:
       return [defaultVoiceInputModel];
     default:

@@ -6,6 +6,7 @@ import { SettingsService } from 'main/sentient-sims/services/SettingsService';
 import { SimDossier } from 'main/sentient-sims/models/SimDossier';
 import { SimStateReport } from 'main/sentient-sims/models/SimStateReport';
 import { FactPredicate } from 'main/sentient-sims/pipeline/facts/predicates';
+import { homeText } from 'main/sentient-sims/pipeline/facts/dossierFacts';
 import { mockApiContext, mockEnvironment } from './util';
 
 // H2: the semantic fact store. The point of the block is that a sim can answer a question
@@ -61,6 +62,20 @@ describe('semantic memory', () => {
     expect(facts.find((fact) => fact.predicate === FactPredicate.FAMILY_BIT)?.objectText).toBe(
       'family_Target_IsSonOrDaughterOf_Actor',
     );
+  });
+
+  it('knows where the sim lives: the lot, its neighborhood and world', () => {
+    const home = { lot_id: '3031564292', name: 'Inner Circle', world: 'Del Sol Valley' };
+    ctx.semanticMemory.ingestDossier(dossier({ household: { id: '900', name: 'Diffey', member_ids: ['100'], home } }), {
+      day: 10,
+    });
+    const facts = ctx.semanticMemory.getCurrentFacts('100');
+    expect(facts.find((fact) => fact.predicate === FactPredicate.HOME)?.objectText).toBe(
+      'Inner Circle, Mirage Park, Del Sol Valley',
+    );
+    // A lot the shipped table does not know (a player's own build) takes the reported world
+    expect(homeText({ lot_id: '42', name: 'The Nook', world: 'Willow Creek' })).toBe('The Nook, Willow Creek');
+    expect(homeText(undefined)).toBeUndefined();
   });
 
   it('adds and retires nothing when the dossier is re-sent unchanged', () => {
@@ -201,7 +216,7 @@ describe('semantic memory', () => {
     expect(pet?.source).toBe('game');
 
     const block = ctx.semanticMemory.recall('100');
-    expect(block).toContain('you live with Mackenzie Scott (the BFF household)');
+    expect(block).toContain('you live with Mackenzie Scott');
     expect(block).toContain('your pet: Bosun the dog');
     // The dog is in the sim's life, labelled as a dog
     expect(block).toContain('- Bosun (dog): your dog');
@@ -279,6 +294,50 @@ describe('semantic memory', () => {
     expect(ctx.semanticMemory.speciesFor('100')).toBeUndefined();
   });
 
+  // Renovation R5a: a relationship bit and what one sim KNOWS about another are game facts (a
+  // flip closes the old row, Zep-style), and no prompt renders them yet (R5b decides where)
+  it('keeps relationship bits and SimKnowledge as game facts that KNOWN_FACTS does not render', () => {
+    const edge = (bits: string[]) => ({
+      sim_id: '200',
+      name: 'Mackenzie Scott',
+      has_met: true,
+      friendship: 100,
+      romance: 0,
+      bits,
+      knowledge: {
+        traits: ['trait_Geek'],
+        careers: ['career_Adult_Athletic'],
+        secrets: ['secret_Cheating'],
+        relationship_status: true,
+      },
+    });
+    ctx.semanticMemory.ingestDossier(dossier({ relationships: [edge(['friendship-friend'])] }), { day: 10 });
+    ctx.semanticMemory.ingestDossier(dossier({ relationships: [edge(['friendship-bff'])] }), { day: 11 });
+    const history = ctx.semanticMemory.getHistory('100').filter((fact) => fact.predicate === FactPredicate.REL_BIT);
+    expect(history.find((fact) => fact.objectText === 'friendship-friend')).toMatchObject({
+      validFromDay: 10,
+      validToDay: 11,
+      source: 'game',
+    });
+    expect(history.find((fact) => fact.objectText === 'friendship-bff')).toMatchObject({ validFromDay: 11 });
+    const current = ctx.semanticMemory.getCurrentFacts('100');
+    expect(current.find((fact) => fact.predicate === FactPredicate.KNOWS_TRAIT)).toMatchObject({
+      objectSimId: '200',
+      objectText: 'trait_Geek',
+    });
+    expect(current.some((fact) => fact.predicate === FactPredicate.KNOWS_STATUS)).toBe(true);
+    // The same block with and without the R5a facts: core's prompts are unchanged
+    const block = ctx.semanticMemory.recall('100', { mentionedSimIds: ['200'] });
+    ctx.db
+      .getDb()
+      .prepare(
+        `DELETE FROM sim_fact WHERE predicate IN
+           ('rel_bit', 'knows_trait', 'knows_career', 'knows_major', 'knows_secret', 'knows_status')`,
+      )
+      .run();
+    expect(ctx.semanticMemory.recall('100', { mentionedSimIds: ['200'] })).toBe(block);
+  });
+
   it('renders what the sim knows into a KNOWN_FACTS block', () => {
     ctx.semanticMemory.ingestDossier(dossier(), { day: 10 });
     const block = ctx.semanticMemory.recall('100', { mentionedSimIds: ['200'] });
@@ -314,7 +373,7 @@ describe('semantic memory', () => {
     // a bare acquaintance does not earn a line
     expect(block).not.toContain('Alice Landgraab');
     // ...and the household is named with its members, not just its name
-    expect(block).toContain('you live with Mackenzie Scott and Liberty Lee (the BFF household)');
+    expect(block).toContain('you live with Mackenzie Scott and Liberty Lee');
   });
 
   it('a person named in the text the sim is about to read gets their fact line', () => {

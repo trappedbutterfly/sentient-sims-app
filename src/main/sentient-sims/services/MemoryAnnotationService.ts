@@ -1,13 +1,13 @@
 import log from 'electron-log';
 import { retiredSentientSimsAIEmbeddingModels } from '../constants';
-import { MemoryEntity } from '../db/entities/MemoryEntity';
 import { ApiType } from '../models/ApiType';
 import { StageId } from '../pipeline/stages';
+import { MemoryEntity } from '../db/entities/MemoryEntity';
+import { ApiContext } from './ApiContext';
+import { embeddingToBuffer } from './EmbeddingService';
 import { IMPORTANCE_SYSTEM_PROMPT } from '../pipeline/prompts/utility';
 import { AIActionType } from '../models/AIActionType';
 import { memoryRecallText } from '../util/memoryRecallText';
-import { ApiContext } from './ApiContext';
-import { embeddingToBuffer } from './EmbeddingService';
 
 // When the rating generation fails (no provider configured, malformed reply), fall back
 // to a prior by memory kind: reflections are distilled and durable, outcomes are notable,

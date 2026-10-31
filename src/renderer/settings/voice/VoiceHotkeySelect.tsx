@@ -8,12 +8,14 @@ type Props = {
   value: string;
   presets: VoiceHotkeyPreset[];
   onChange: (chord: string) => void;
+  // A row shown before the presets (the command key's "Off")
+  leading?: { value: string; label: string };
 };
 
 // A hotkey dropdown whose last row, "Custom…", opens a dialog that records the next key
 // or chord pressed. The captured chord is saved in the overlay's spelling, and presets
 // keep it as a row of its own once it is the bound key.
-export default function VoiceHotkeySelect({ value, presets, onChange }: Props) {
+export default function VoiceHotkeySelect({ value, presets, onChange, leading }: Props) {
   const { isMac } = window.electron;
   const [capturing, setCapturing] = useState(false);
   const [captured, setCaptured] = useState<string>();
@@ -51,6 +53,7 @@ export default function VoiceHotkeySelect({ value, presets, onChange }: Props) {
     <>
       <Select
         size="small"
+        displayEmpty={Boolean(leading)}
         value={value}
         onChange={(change) => {
           if (change.target.value === CUSTOM) {
@@ -60,6 +63,7 @@ export default function VoiceHotkeySelect({ value, presets, onChange }: Props) {
           }
         }}
       >
+        {leading ? <MenuItem value={leading.value}>{leading.label}</MenuItem> : null}
         {presets.map((preset) => (
           <MenuItem key={preset.value} value={preset.value}>
             {preset.label}

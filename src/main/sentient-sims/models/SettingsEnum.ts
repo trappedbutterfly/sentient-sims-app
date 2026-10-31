@@ -71,13 +71,26 @@ export enum SettingsEnum {
   COGNITION_PIPELINE = 'cognitionPipeline', // legacy review dial; unused since the Action Scene pipeline
   // Full Autonomy: a tick/scene action score at or above this stages an Action Scene
   COGNITION_ACTION_SCORE_THRESHOLD = 'cognitionActionScoreThreshold',
+  // Autonomy part 2 (2026-10-21): the options stage offers the game's pie menu ('pie', the
+  // mod's cognition vocabulary) or the 61-verb whitelist ('whitelist')
+  COGNITION_VOCABULARY = 'cognitionVocabulary',
+  // Autonomy part 1: every cognition lane asks the mod's moment predicate before a model call
+  COGNITION_GATE_ENABLED = 'cognitionGateEnabled',
+  // Autonomy part 5: the intention rows (the day loop's ordered list), the pace between
+  // beats in sim-minutes, and the need floor under which a need row exists
+  INTENTION_ROWS_ENABLED = 'intentionRowsEnabled',
+  INTENTION_BEAT_MINUTES = 'intentionBeatMinutes',
+  INTENTION_NEED_FLOOR = 'intentionNeedFloor',
+  COGNITION_LEGACY_TICK = 'cognitionLegacyTick',
+  INTENTION_NIGHT_CALL_ENABLED = 'intentionNightCallEnabled',
+  INTENTION_VOICE_WHY = 'intentionVoiceWhy',
   // Daily plans: nightly goals-from-pool + persona sentence + discretionary action loadout
   DAILY_GOALS_ENABLED = 'dailyGoalsEnabled',
   DAILY_LOADOUT_SIZE = 'dailyLoadoutSize',
   // Voice input: hold-to-talk mic capture transcribed by the chosen provider, injected
   // into the game as the active sim speaking
   VOICE_INPUT_ENABLED = 'voiceInputEnabled',
-  VOICE_INPUT_PROVIDER = 'voiceInputProvider', // sentientsimsai | openai | openrouter | gemini | custom
+  VOICE_INPUT_PROVIDER = 'voiceInputProvider', // sentientsimsai | elevenlabs (Scribe) | openai | openrouter | gemini | custom
   // The custom OpenAI-compatible endpoint's own connection
   VOICE_INPUT_ENDPOINT = 'voiceInputEndpoint',
   VOICE_INPUT_KEY = 'voiceInputKey',
@@ -86,6 +99,8 @@ export enum SettingsEnum {
   VOICE_INPUT_MODELS = 'voiceInputModels',
   VOICE_INPUT_HOTKEY = 'voiceInputHotkey',
   VOICE_INPUT_HOTKEY_MODE = 'voiceInputHotkeyMode', // hold | toggle
+  // Set once runMigrations has moved a store off the old Ctrl+Space default
+  VOICE_INPUT_HOTKEY_MIGRATED = 'voiceInputHotkeyMigrated',
   VOICE_INPUT_LANGUAGE = 'voiceInputLanguage', // ISO-639-1 hint, empty = auto-detect
   VOICE_INPUT_DEVICE_ID = 'voiceInputDeviceId', // empty = system default mic
   // V-1: voice/subtitle playback pauses with a user pause and paces with speed 2/3
@@ -105,6 +120,16 @@ export enum SettingsEnum {
   OUTCOME_INSTANT_SUCCESS_MS = 'outcomeInstantSuccessMs',
   // V-5a: how many rounds a directed scene may continue itself
   SCENE_MAX_ROUNDS = 'sceneMaxRounds',
+  // Lean (default, 2026-10-27): one actor call per Sim per round, the beat carried into every
+  // round, fixed rounds; no director, reviewer or per-round scores. Full: the 4.6 pipeline.
+  SCENE_PIPELINE_MODE = 'scenePipelineMode',
+  // Lean only: the actor rules without the Sim's name (one cacheable prefix shared by every
+  // Sim and every user). Series 3 of the voice-pipeline bench sets the default.
+  LEAN_NAME_FREE_RULES = 'leanNameFreeRules',
+  // A directed scene is dropped, not aired late, once its game event is older than this:
+  // the sims have moved on by then (stream 2026-10-11: fans at a VIP rope stacked up
+  // scenes that aired minutes after the game had paired the celebrity with someone else)
+  SCENE_EVENT_MAX_AGE_MS = 'sceneEventMaxAgeMs',
   // Player-facing replies (chat window, voice, conscience, Twitch): the actor's token
   // budget for a reply to the player, how long a conversation thread stays open between
   // the player's lines, and whether a reply may turn straight into an action
@@ -114,6 +139,9 @@ export enum SettingsEnum {
   // The scorer's action verdict a reply must reach before it may act (its own bar, above
   // the tick's: a chat is not an invitation to go do chores)
   CONVERSATION_ACTION_SCORE_THRESHOLD = 'conversationActionScoreThreshold',
+  // A Twitch viewer's line may turn into an action (off: viewers never arm or stage one; the
+  // 10-19 stream had viewers' heckles waking a sleeping Sim into clean_up)
+  CONVERSATION_ACTIONS_FROM_VIEWERS = 'conversationActionsFromViewers',
   // Pets, babies and infants (the sims the player cannot control) take speaking turns.
   // Off: they still think, as a private monologue row, but never say a line aloud
   NON_CONTROLLABLE_SIMS_SPEAK = 'nonControllableSimsSpeak',
@@ -134,12 +162,17 @@ export enum SettingsEnum {
   // "Name=simId" lines: extra !ask targets for sims the game reports namelessly (service
   // NPCs like the Grim Reaper) — reachable by chat even when not on the lot
   TWITCH_SIM_ALIASES = 'twitchSimAliases',
+  // "twitchname=Name" lines: what the sims call a viewer instead of their Twitch name
+  TWITCH_VIEWER_NAMES = 'twitchViewerNames',
   TWITCH_CLIENT_ID = 'twitchClientId',
   TWITCH_AUTH = 'twitchAuth', // stored device-flow tokens + broadcaster identity
   // Speak each viewer's typed question aloud in a dedicated ElevenLabs voice before the reply
   TWITCH_SPEAK_QUESTIONS = 'twitchSpeakQuestions',
   TWITCH_CHAT_VOICE_ID = 'twitchChatVoiceId', // '' = the built-in default chat voice
 }
+
+// The directed-scene pipeline: see SettingsEnum.SCENE_PIPELINE_MODE
+export type ScenePipelineMode = 'lean' | 'full';
 
 export enum DeprecatedSettingsEnum {
   CUSTOM_LLM_ENABLED = 'customLLMEnabled',

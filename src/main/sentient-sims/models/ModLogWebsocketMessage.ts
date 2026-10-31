@@ -11,7 +11,73 @@ export type ModLogWebsocketMessage = {
   mod_info?: ModInfo;
   // The overlay heard a bound voice chord go down or up (overlay/overlay_voice_hotkey.py)
   voice_key?: VoiceKeyEvent;
+  // Cognition's query channel (interactions/ss_cognition_query.py -> the autonomy tier's
+  // ModQueryService): the answer to a cognition_query, or a held click's end
+  cognition?: CognitionModMessage;
 };
+
+// The answer to a cognition_query, same request_id
+export type CognitionQueryResult = {
+  kind: 'query_result';
+  request_id: string;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+  elapsed_ms?: number;
+};
+
+// A player click the mod reported as a hold (moment.hold) has ended: the Sim may deliberate
+export type CognitionHoldReleased = {
+  kind: 'hold_released';
+  sim_id: string;
+  interaction_id: string;
+  held_sim_id?: string;
+  name?: string;
+  finishing?: string;
+  ran?: boolean;
+};
+
+// The game marked a goal done (interactions/ss_goal_events.py): WhimCompleted names the want,
+// AspirationGoalComplete is a nudge to re-read the goal pool (autonomy part 5)
+export type CognitionGoalCompleted = {
+  kind: 'goal_completed';
+  sim_id: string;
+  sim_name?: string;
+  whim?: string;
+  source: 'whim' | 'aspiration';
+};
+
+// One household interaction the game ended (interactions/ss_household_log.py, renovation R1).
+// origin: ours = the mod pushed it, player = it came through the game client, game = the rest
+export type CognitionInteractionLogRecord = {
+  interaction_id?: string;
+  sim_id: string;
+  name?: string;
+  super_name?: string | null;
+  is_super?: boolean;
+  target_kind?: string | null;
+  target_id?: string | null;
+  ran?: boolean;
+  canceled?: boolean;
+  user_canceled?: boolean;
+  finishing?: string;
+  origin?: 'ours' | 'player' | 'game';
+  day?: number | null;
+  minute?: number | null;
+  zone_id?: string | null;
+};
+
+// A batch of them, every few seconds
+export type CognitionInteractionLog = {
+  kind: 'interaction_log';
+  records: CognitionInteractionLogRecord[];
+};
+
+export type CognitionModMessage =
+  | CognitionQueryResult
+  | CognitionHoldReleased
+  | CognitionGoalCompleted
+  | CognitionInteractionLog;
 
 export type VoiceKeyEvent = {
   // 'talk' = speak to the sim; 'command' (V-8) = an order; 'dictate' = the memories
@@ -33,7 +99,9 @@ export type SceneControl = {
   // 'soft' lets the line already playing finish; 'hard' cuts it off now
   mode: 'soft' | 'hard';
   scene_id?: string;
-  reason: 'walked_away' | 'left_lot' | 'zone_unload' | 'cheat';
+  // 'left_lot': a sim in the scene despawned; 'absent': a sim the scene names was not on
+  // the lot when its first line aired. Both carry sim_id and end every scene that sim is in.
+  reason: 'walked_away' | 'left_lot' | 'absent' | 'zone_unload' | 'cheat';
   // Who ended it, and how far away they had got
   sim_id?: string | null;
   distance_m?: number | null;

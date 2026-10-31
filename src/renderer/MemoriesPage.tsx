@@ -281,8 +281,6 @@ export default function MemoriesPage() {
     const renderText: any[] = [];
 
     memories.forEach((memory, index) => {
-      // A content-less memory is served with its observation/pre_action as content so the
-      // in-game window can render it, so drop the repeat instead of printing it twice
       const body = [memory.observation, memory.action, memory.content]
         .filter((m, i, all) => m && all.indexOf(m) === i)
         .join('\n');
@@ -295,6 +293,8 @@ export default function MemoriesPage() {
           }}
           className="hoverHighlightTypography"
         >
+          {/* A content-less memory is served with its observation/pre_action as content so the
+              in-game window can render it, so drop the repeat instead of printing it twice */}
           {tag ? (
             <Typography component="span" variant="body2" sx={{ color: 'text.secondary', marginRight: 0.5 }}>
               {tag}

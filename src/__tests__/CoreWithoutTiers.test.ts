@@ -99,12 +99,16 @@ describe('core without tiers', () => {
 
   it('leaves every capability slot empty', () => {
     const ctx = mockApiContext({ tiers: [] });
+    // These tests mock the 4.6 pipeline by stage label; the default is lean (2026-10-27)
+    ctx.settings.set(SettingsEnum.SCENE_PIPELINE_MODE, 'full');
     expect(ctx.tiers).toEqual([]);
     expect(ctx.ext).toEqual({});
   });
 
   it('writes the plain diary at a sleep boundary with no planner', async () => {
     const core = mockApiContext({ tiers: [] });
+    // These tests mock the 4.6 pipeline by stage label; the default is lean (2026-10-27)
+    core.settings.set(SettingsEnum.SCENE_PIPELINE_MODE, 'full');
     core.settings.set(SettingsEnum.DAILY_GOALS_ENABLED, true);
     const coreRun = sleepReflectionFixture(core);
     await core.ai.runSceneReflection(coreRun.scene, { simId: sim.sim_id, simName: sim.name }, 'sleep', {
@@ -124,6 +128,8 @@ describe('core without tiers', () => {
     'plans on that same fixture when the autonomy tier is present',
     async () => {
       const dev = mockApiContext();
+      // These tests mock the 4.6 pipeline by stage label; the default is lean (2026-10-27)
+      dev.settings.set(SettingsEnum.SCENE_PIPELINE_MODE, 'full');
       dev.settings.set(SettingsEnum.DAILY_GOALS_ENABLED, true);
       const devRun = sleepReflectionFixture(dev);
       await dev.ai.runSceneReflection(devRun.scene, { simId: sim.sim_id, simName: sim.name }, 'sleep', {
@@ -136,6 +142,8 @@ describe('core without tiers', () => {
 
   it('answers a solo request with the ordinary reply when nothing can act on it', async () => {
     const ctx = mockApiContext({ tiers: [] });
+    // These tests mock the 4.6 pipeline by stage label; the default is lean (2026-10-27)
+    ctx.settings.set(SettingsEnum.SCENE_PIPELINE_MODE, 'full');
     const promptRequest: PromptRequest = {
       location: '<LOCATION>A quiet living room.</LOCATION>',
       dateTime: 'It is midday.',
@@ -172,7 +180,7 @@ describe('core without tiers', () => {
     expect(systemPrompts.some((prompt) => prompt.includes('You triage one line'))).toBe(false);
   });
 
-  it("serves the core routes, Gus's cognition routes among them, and not the autonomy ones", async () => {
+  it('serves the core routes and not the autonomy ones', async () => {
     const ctx = mockApiContext({ tiers: [], port: 25197 });
     const server: Server = runApi(ctx);
     try {
@@ -183,22 +191,14 @@ describe('core without tiers', () => {
         body: JSON.stringify({ type: 'state_report', seq: 7, sims: [] }),
       });
       expect(state.status).toBe(200);
-      // Gus's 4.1.0 cognition plumbing answers in core: each of these is his own reply to
-      // a body with only a sim id
-      const expected: Record<string, number> = {
-        '/cognition/outcome': 400,
-        '/cognition/perception': 200,
-        '/cognition/debug/enqueue': 400,
-      };
-      for (const [route, status] of Object.entries(expected)) {
+      for (const route of ['/cognition/outcome', '/cognition/perception', '/cognition/debug/enqueue']) {
         const response = await fetch(`${base}${route}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sim_id: '1' }),
         });
-        expect(response.status).toBe(status);
+        expect(response.status).toBe(404);
       }
-      // The graded outcome log is autonomy's
       expect((await fetch(`${base}/ai/outcomes`)).status).toBe(404);
     } finally {
       await new Promise<void>((resolve) => {

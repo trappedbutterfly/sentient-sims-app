@@ -28,6 +28,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { PatreonUser } from 'main/sentient-sims/wrappers/PatreonUser';
+import { locationReferences } from 'main/sentient-sims/util/locationReference';
 import AppCard from './AppCard';
 import { EmptyState } from './components/EmptyState';
 import { MemoryEditInput } from './components/MemoryEditInput';
@@ -37,6 +38,7 @@ import { useWebsocket } from './providers/WebsocketProvider';
 import { useAuth } from './providers/AuthProvider';
 import { useSnackBar } from './providers/SnackBarProvider';
 import { SentientSimsAppClient } from 'main/sentient-sims/clients/SentientSimsAppClient';
+import { rendererTiers } from './tiers/merge';
 
 type SelectedLocation = {
   location: LocationEntity;
@@ -169,7 +171,7 @@ export default function LocationsPage() {
   );
 
   async function handleSave() {
-    const shown = editedLocation ? locations[editedLocation.index] : undefined;
+    const shown = editedLocation ? locations.find((row) => row.id === editedLocation.location.id) : undefined;
     const changed =
       !shown ||
       shown.name !== editedLocation?.location.name ||
@@ -353,9 +355,10 @@ export default function LocationsPage() {
 
   if (editedLocation) {
     const { location } = editedLocation;
+    const saved = locations.find((row) => row.id === location.id);
     const ownText = location.source === 'save' || location.source === 'generated';
     const fallback = location.default;
-    const differsFromDefault = !!fallback && fallback.description !== location.description;
+    const references = locationReferences(saved, location.description);
 
     editLocationBox = (
       <AppCard
@@ -542,16 +545,19 @@ export default function LocationsPage() {
             </Tooltip>
           </Box>
         </>
-        {ownText && fallback && differsFromDefault && (
-          <Box sx={{ mt: 2 }}>
+        {references.map((reference) => (
+          <Box key={reference.kind} sx={{ mt: 2 }}>
             <Typography variant="caption" color="text.secondary">
-              Default description
+              {reference.title}
+              {reference.matchesBox && ' (same as the box)'}
             </Typography>
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-              {fallback.description}
-            </Typography>
+            {!reference.matchesBox && (
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                {reference.text}
+              </Typography>
+            )}
           </Box>
-        )}
+        ))}
       </AppCard>
     );
   }
@@ -604,6 +610,10 @@ export default function LocationsPage() {
         </CardContent>
       </Card>
       {editLocationBox}
+      {rendererTiers.locationsCards.map((LocationsCard, index) => (
+        // eslint-disable-next-line @eslint-react/no-array-index-key
+        <LocationsCard key={index} />
+      ))}
       <Dialog
         open={namesFromSave.length > 0}
         onClose={() => {

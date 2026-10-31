@@ -8,8 +8,8 @@ import { mockApiContext } from './util';
 
 // J1 (2026-09-04): a reflection is one Sim's private diary. The prompt used to gather the
 // three most recent world-wide plus two at the location, any author, so Milo's briefing
-// carried Tessa's day at another lot and the actors played it as shared history (the
-// 2026-09-04 playtest handoff, cause 1). Now each performer gets only rows they own.
+// carried Tessa's day at another lot and the actors played it as shared history (Jaz's
+// 09-04 handoff, cause 1). Now each performer gets only rows they own.
 describe('owner-scoped reflections', () => {
   it('returns only the rows a sim owns, and an unowned row for nobody', () => {
     const ctx = mockApiContext();

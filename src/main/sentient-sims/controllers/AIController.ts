@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import log from 'electron-log';
 import { InteractionEvents, SSEventType } from '../models/InteractionEvents';
-import { DirectedSceneRequest } from '../models/DirectedSceneRequest';
-import { playTTS, sendChatGeneration } from '../util/notifyRenderer';
+import { sendChatGeneration } from '../util/notifyRenderer';
+import { rememberSims } from '../util/knownSims';
 import { OpenAICompatibleRequest } from '../models/OpenAICompatibleRequest';
 import { InteractionEventStatus } from '../models/InteractionEventResult';
 import { BuffEventRequest, BuffDescriptionRequest, ClassificationRequest } from '../models/OpenAIRequestBuilder';
@@ -15,6 +15,7 @@ import {
 } from '../services/GenerationQueueService';
 import { ApiTypeFromValue } from '../models/ApiType';
 import { ImageGenerationRequest } from '../models/ImageGeneration';
+import { DirectedSceneRequest } from '../models/DirectedSceneRequest';
 
 export class AIController {
   private readonly ctx: ApiContext;
@@ -59,10 +60,26 @@ export class AIController {
     // The chat window blocks on this response while prefetch traffic is speculative,
     // so chat messages skip ahead of queued prefetch generations
     const isChat = event.event_type === SSEventType.CHAT || event.event_type === SSEventType.CHAT_CONTINUE;
+    // A game event is stamped on arrival: the scene it becomes may wait in the queue
+    // behind other scenes, and it is dropped rather than aired once the game has moved on
+    const isGameEvent = event.event_type === SSEventType.INTERACTION || event.event_type === SSEventType.CONTINUE;
+    const eventAt = Date.now();
+
+    // (an older mod may post an event without a cast; Array.isArray keeps that alive)
+    if (Array.isArray(event.sentient_sims)) {
+      rememberSims(event.sentient_sims);
+    }
+    if (isGameEvent && Array.isArray(event.sentient_sims)) {
+      this.ctx.sceneFreshness.recordEvent(
+        event.sentient_sims.map((sim) => ({ simId: sim.sim_id, name: sim.name })),
+        eventAt,
+      );
+    }
+    const meta = isGameEvent ? { eventAt } : undefined;
     const result = isPlayerVoice
-      ? await this.ctx.generationQueue.runSpeech(() => this.ctx.ai.interactionEvent(event))
+      ? await this.ctx.generationQueue.runSpeech(() => this.ctx.ai.interactionEvent(event, meta))
       : await this.ctx.generationQueue.runExclusive(
-          ({ arrivedAt }) => this.ctx.ai.interactionEvent(event, { arrivedAt }),
+          ({ arrivedAt }) => this.ctx.ai.interactionEvent(event, { ...meta, arrivedAt }),
           { priority: isChat, blocking: true },
         );
     result.input = event;
@@ -86,8 +103,10 @@ export class AIController {
   interactionClaim = async (req: Request, res: Response) => {
     const request = req.body as InteractionClaimRequest;
     log.debug(`Interaction claim: ${request.correlation_id}`);
-    const { result, play } = await this.ctx.generationQueue.claim(request);
-    play();
+    const { result: generated, play } = await this.ctx.generationQueue.claim(request);
+    // A scene that declined to air (the game moved on while it waited) must not be
+    // handed to the mod as text either: it would be stored as a memory nobody heard
+    const result = !play() ? { status: InteractionEventStatus.NOOP } : generated;
     result.input = request.event;
     const spacedText = this.ctx.settings.directedScenesEnabled && result.text ? `\n${result.text}` : result.text;
     res.json({ ...result, text: spacedText });
@@ -108,6 +127,7 @@ export class AIController {
     res.json({ ok: true, found: this.ctx.generationQueue.cancel(request.correlation_id) });
   };
 
+  // The scenario tester (renderer ChatPage) runs a directed scene straight from the app
   @CatchErrors()
   directedSceneEvent = async (req: Request, res: Response) => {
     const request = req.body as DirectedSceneRequest;
@@ -159,19 +179,5 @@ export class AIController {
       typeof apiType === 'string' && apiType !== '' ? ApiTypeFromValue(apiType) : undefined,
     );
     res.json(result);
-  };
-
-  @CatchErrors()
-  tts = (req: Request, res: Response) => {
-    const { text } = req.query;
-
-    if (!text) {
-      res.status(400).json({ error: 'Must include text query parameter' });
-      return;
-    }
-
-    playTTS(text as string);
-
-    res.status(200).json({ text });
   };
 }

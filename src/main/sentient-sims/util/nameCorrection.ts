@@ -258,7 +258,7 @@ export function correctPlaces(transcript: string): string {
 // exactly the moment it was needed (live 08-27: "Margot" stayed uncorrected). The
 // wrong-name snaps that motivated scoping were sentence-initial fillers, and the
 // COMMON_WORDS guard handles those directly.
-// Tie-breaks (J7, the 2026-09-04 playtest handoff, cause 7): "Rin" is phonetic distance 1 from BOTH
+// Tie-breaks (J7, Jaz's 09-04 handoff, cause 7): "Rin" is phonetic distance 1 from BOTH
 // Wren ("ren") and Rainn ("rain"), so the clearly-closest rule let it through uncorrected
 // and the sims copied the misspelling into memory. Three keys settle a phonetic tie
 // before giving up: same phonetic length as what was heard (a vowel swap, not a dropped

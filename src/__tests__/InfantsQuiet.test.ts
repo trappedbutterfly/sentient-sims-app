@@ -4,7 +4,7 @@ import { SceneState } from 'main/sentient-sims/services/SceneService';
 import { MemoryEntity } from 'main/sentient-sims/db/entities/MemoryEntity';
 import { mockApiContext } from './util';
 
-// J8 (the 2026-09-04 playtest handoff, cause 8): infants wrote diaries and ran Action Scenes that
+// J8 (Jaz's 09-04 handoff, cause 8): infants wrote diaries and ran Action Scenes that
 // could not produce an option. Below CHILD the sim is quiet: no diary at a boundary,
 // no deliberation with an empty vocabulary. Unknown age fails OPEN — nothing may stop a
 // Sim thinking on a missing field.

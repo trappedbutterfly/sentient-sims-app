@@ -41,6 +41,7 @@ describe('groupFacts', () => {
     fact(FactPredicate.OCCULT_CURRENT, 'HUMAN'),
     fact(FactPredicate.ALIVE, 'yes'),
     fact(FactPredicate.HOUSEHOLD, 'Calloway'),
+    fact(FactPredicate.HOME, 'Inner Circle, Mirage Park, Del Sol Valley'),
     fact(FactPredicate.HOUSEHOLD_MEMBER, undefined, '200'),
     fact(FactPredicate.HOUSEHOLD_MEMBER, undefined, '700'),
     fact(FactPredicate.PET, undefined, '700'),
@@ -93,7 +94,8 @@ describe('groupFacts', () => {
     expect(grouped.summary.map((item) => [item.title, item.label])).toEqual([
       ['Age', 'young adult'],
       ['Gender', 'male (he/him)'],
-      ['Household', 'Calloway'],
+      ['Home', 'Inner Circle, Mirage Park, Del Sol Valley'],
+      ['Household Members', 'Mackenzie Scott, Bosun (dog)'],
       ['Career', 'Business, level 6'],
       ['Aspiration', 'Friend of the World'],
     ]);

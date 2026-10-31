@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import log from 'electron-log';
+import { plainSentientSimsError } from 'main/sentient-sims/util/providerErrorWords';
 import axios from 'axios';
 import { useAISettings } from 'renderer/providers/AISettingsProvider';
 import { SettingsEnum } from 'main/sentient-sims/models/SettingsEnum';
@@ -20,9 +21,10 @@ import { SentenceTokenizeResponse } from 'main/sentient-sims/models/SentenceToke
 import { SentenceTokenizeRequest } from 'main/sentient-sims/models/SentenceTokenizerRequest';
 import { DialogueLine } from 'main/sentient-sims/formatter/PromptFormatter';
 import { assignVoicesToSpeakers } from 'main/sentient-sims/formatter/VoiceAssignment';
+import { synthesizeWordTimes } from 'main/sentient-sims/voice/lineTiming';
 import { AudioPlaybackHandle, playAudioUrl } from './audioPlayback';
 import { pacedDelay } from './playbackClock';
-import { TTSHook } from './TTSHook';
+import { LineReveal, TTSHook } from './TTSHook';
 
 type QueuedSpeech = { text: string; voice: string[] };
 
@@ -99,14 +101,14 @@ export function useSentientSimsTTS(): TTSHook {
         if (!response.ok) {
           const errorMessage = `Unable to fetch audio: ${response.status}`;
           log.error(errorMessage);
+          let bodyResponse = '';
           try {
-            const bodyResponse = await response.text();
+            bodyResponse = await response.text();
             log.error(bodyResponse);
-            setError(bodyResponse);
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          } catch (err: any) {
-            setError(errorMessage);
+          } catch {
+            // The status alone decides the message
           }
+          setError(plainSentientSimsError(`${response.status} ${bodyResponse}`));
           return null;
         }
 
@@ -127,7 +129,7 @@ export function useSentientSimsTTS(): TTSHook {
       } catch (err) {
         const errorMessage = `TTS request failed: ${err instanceof Error ? err.message : String(err)}`;
         log.error(errorMessage);
-        setError(errorMessage);
+        setError("Couldn't reach the Sentient Sims voice server. Check your internet connection and try again.");
         return null;
       }
     },
@@ -235,7 +237,7 @@ export function useSentientSimsTTS(): TTSHook {
         const errorMessage = `Sentence tokenization failed: ${err instanceof Error ? err.message : String(err)}`;
         const responseData: unknown = axios.isAxiosError(err) ? err.response?.data : undefined;
         log.error(errorMessage, responseData);
-        setError(errorMessage);
+        setError(plainSentientSimsError(errorMessage));
       }
     },
     [
@@ -251,7 +253,7 @@ export function useSentientSimsTTS(): TTSHook {
   const speakLines = useCallback(
     async (
       lines: DialogueLine[],
-      onLineStart?: (line: DialogueLine, voiced: boolean) => void,
+      onLineStart?: (line: DialogueLine, voiced: boolean, reveal?: LineReveal) => void,
       onLineEnd?: (line: DialogueLine) => void,
       shouldContinue?: () => boolean,
     ): Promise<void> => {
@@ -306,11 +308,33 @@ export function useSentientSimsTTS(): TTSHook {
             break;
           }
 
-          onLineStart?.(lines[i], audioUrl !== null);
+          // An object, not a bare boolean: set inside onStart, read after (TS's flow
+          // analysis would otherwise fold a bare boolean to "never started")
+          const state = { started: false };
           try {
             if (audioUrl) {
               try {
-                const playback = await playAudioUrl(audioUrl, aiSettings.ttsVolume);
+                // Kokoro returns no timestamps: the words are spread over the audio's
+                // duration by weight, reported when the first sample sounds
+                const playback = await playAudioUrl(audioUrl, aiSettings.ttsVolume, {
+                  onStart: (start) => {
+                    state.started = true;
+                    const wordMs = start.durationMs ? synthesizeWordTimes(lines[i].text, start.durationMs) : [];
+                    onLineStart?.(
+                      lines[i],
+                      true,
+                      wordMs.length
+                        ? {
+                            wordMs,
+                            partial: false,
+                            startedAtMs: start.startedAtMs,
+                            rate: start.rate,
+                            source: 'estimate',
+                          }
+                        : undefined,
+                    );
+                  },
+                });
                 currentPlaybackRef.current = playback;
                 await playback.finished;
               } catch (err) {
@@ -320,7 +344,9 @@ export function useSentientSimsTTS(): TTSHook {
                 currentPlaybackRef.current = null;
                 URL.revokeObjectURL(audioUrl);
               }
+              if (!state.started) onLineStart?.(lines[i], false);
             } else {
+              onLineStart?.(lines[i], false);
               // No audio to time the subtitle — hold for its reading time instead
               // (paced: scales with game speed, freezes on a user pause — V-1)
               await pacedDelay(sceneLineReadingHoldMs(lines[i].text));

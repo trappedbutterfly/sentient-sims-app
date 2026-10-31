@@ -93,7 +93,8 @@ export class MemoryRepository extends Repository {
   // excludeEventTypes is applied before the cap, so hidden rows never crowd out shown ones.
   getMemories(excludeEventTypes: string[] = []): MemoryEntity[] {
     const exclude = excludeEventTypes.filter((eventType) => eventType.length > 0);
-    const where = exclude.length > 0 ? `WHERE event_type NOT IN (${exclude.map(() => '?').join(', ')})` : '';
+    const where =
+      exclude.length > 0 ? `WHERE event_type IS NULL OR event_type NOT IN (${exclude.map(() => '?').join(', ')})` : '';
     const memories = this.dbService
       .getDb()
       .prepare(

@@ -138,7 +138,7 @@ export class AIExchangeLogService {
     const context = this.labelContext.getStore();
     const id = this.nextId;
     this.nextId += 1;
-    if (!params.cancelled && context?.health !== false) {
+    if (context?.health !== false && !params.cancelled) {
       this.trackHealth(params.error);
     }
 

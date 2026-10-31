@@ -1,7 +1,7 @@
 import log from 'electron-log';
 import Store from 'electron-store';
 import path from 'path';
-import { DeprecatedSettingsEnum, SettingsEnum } from '../models/SettingsEnum';
+import { DeprecatedSettingsEnum, ScenePipelineMode, SettingsEnum } from '../models/SettingsEnum';
 import {
   PLAYER_VOICE_PERSONAS,
   PlayerVoicePersona,
@@ -41,9 +41,11 @@ import {
   defaultSentientSimsAIHost,
   defaultGameAppPath,
   defaultVoiceInputHotkeyFor,
+  formerDefaultVoiceInputHotkey,
   defaultVoiceInputModel,
   defaultTwitchCommandWord,
   defaultTwitchChatVoiceId,
+  defaultSceneEventMaxAgeMs,
 } from '../constants';
 import { TwitchStoredAuth } from '../models/TwitchStoredAuth';
 import { redactSettingValue } from '../util/redactSetting';
@@ -312,6 +314,48 @@ export function defaultStore(cwd?: string) {
         // reports) and every failure path fails open to pre-plan behavior
         default: true,
       },
+      [SettingsEnum.COGNITION_VOCABULARY.toString()]: {
+        type: 'string',
+        // 'pie' offers the game's own pie menu through the mod; an older mod (no
+        // cognition_query listener) falls back to the whitelist prompt on its own
+        default: 'pie',
+      },
+      [SettingsEnum.COGNITION_GATE_ENABLED.toString()]: {
+        type: 'boolean',
+        // The moment gate before every model lane; off = the pre-2026-10-21 behaviour
+        default: true,
+      },
+      [SettingsEnum.INTENTION_ROWS_ENABLED.toString()]: {
+        type: 'boolean',
+        // The row lane (autonomy part 5); off = chat 1's behaviour, rows never seeded or fired
+        default: true,
+      },
+      [SettingsEnum.INTENTION_BEAT_MINUTES.toString()]: {
+        type: 'number',
+        // One beat per Sim per this many sim-minutes (need rows are exempt)
+        default: 120,
+      },
+      [SettingsEnum.INTENTION_NEED_FLOOR.toString()]: {
+        type: 'number',
+        // A need under this gets a row; the -85 critical rule lane sits below it untouched
+        default: -60,
+      },
+      [SettingsEnum.COGNITION_LEGACY_TICK.toString()]: {
+        type: 'boolean',
+        // Autonomy part 7: the per-tick deliberation (monologue, scores) and the review stage
+        // run only when this is on; off = the rows decide
+        default: false,
+      },
+      [SettingsEnum.INTENTION_NIGHT_CALL_ENABLED.toString()]: {
+        type: 'boolean',
+        // Autonomy part 6: one night call per household Sim at the day rollover edits the list
+        default: true,
+      },
+      [SettingsEnum.INTENTION_VOICE_WHY.toString()]: {
+        type: 'boolean',
+        // A fired row with a `say` line voices it as a "(to self)" line
+        default: true,
+      },
       [SettingsEnum.DAILY_LOADOUT_SIZE.toString()]: {
         type: 'number',
         // 8 not 6 (2026-08-15): the discretionary set grew from 22 to 34 keys with the
@@ -359,6 +403,20 @@ export function defaultStore(cwd?: string) {
         type: 'number',
         default: 3,
       },
+      [SettingsEnum.SCENE_PIPELINE_MODE.toString()]: {
+        type: 'string',
+        default: 'lean',
+      },
+      [SettingsEnum.LEAN_NAME_FREE_RULES.toString()]: {
+        type: 'boolean',
+        // Series 3 (2026-10-27): name-free within 0.25/10 of named rules, beat kept on 10/11
+        // special scenes; watch words per line on the first stream (9.5 vs 9.0)
+        default: true,
+      },
+      [SettingsEnum.SCENE_EVENT_MAX_AGE_MS.toString()]: {
+        type: 'number',
+        default: 60000,
+      },
       [SettingsEnum.PLAYER_REPLY_MAX_TOKENS.toString()]: {
         type: 'number',
         // A full answer with its reasons is a paragraph, not a line: 400 tokens is
@@ -387,6 +445,11 @@ export function defaultStore(cwd?: string) {
         // Above the tick's 6: on the 09-22 stream 78 of 119 player-facing beats crossed
         // 6 and most of them were casual lines. 8 is "I really should" territory.
         default: 8,
+      },
+      [SettingsEnum.CONVERSATION_ACTIONS_FROM_VIEWERS.toString()]: {
+        type: 'boolean',
+        // A viewer is not in the world; their lines are talk, never an order (10-19 review)
+        default: false,
       },
       [SettingsEnum.GENERATED_DEFAULT_DESCRIPTIONS.toString()]: {
         type: 'boolean',
@@ -419,6 +482,10 @@ export function defaultStore(cwd?: string) {
       [SettingsEnum.VOICE_INPUT_HOTKEY_MODE.toString()]: {
         type: 'string',
         default: 'hold',
+      },
+      [SettingsEnum.VOICE_INPUT_HOTKEY_MIGRATED.toString()]: {
+        type: 'boolean',
+        default: false,
       },
       [SettingsEnum.VOICE_INPUT_LANGUAGE.toString()]: {
         type: 'string',
@@ -465,6 +532,10 @@ export function defaultStore(cwd?: string) {
         default: '',
       },
       [SettingsEnum.TWITCH_SIM_ALIASES.toString()]: {
+        type: 'string',
+        default: '',
+      },
+      [SettingsEnum.TWITCH_VIEWER_NAMES.toString()]: {
         type: 'string',
         default: '',
       },
@@ -1248,6 +1319,40 @@ export class SettingsService {
     return this.get(SettingsEnum.DAILY_GOALS_ENABLED) as boolean;
   }
 
+  get cognitionVocabulary(): 'pie' | 'whitelist' {
+    return (this.get(SettingsEnum.COGNITION_VOCABULARY) as string) === 'whitelist' ? 'whitelist' : 'pie';
+  }
+
+  get cognitionGateEnabled(): boolean {
+    return this.get(SettingsEnum.COGNITION_GATE_ENABLED) !== false;
+  }
+
+  get intentionRowsEnabled(): boolean {
+    return this.get(SettingsEnum.INTENTION_ROWS_ENABLED) !== false;
+  }
+
+  get intentionBeatMinutes(): number {
+    const raw = Number(this.get(SettingsEnum.INTENTION_BEAT_MINUTES));
+    return Math.min(480, Math.max(15, Number.isFinite(raw) ? raw : 120));
+  }
+
+  get intentionNeedFloor(): number {
+    const raw = Number(this.get(SettingsEnum.INTENTION_NEED_FLOOR));
+    return Math.min(-20, Math.max(-84, Number.isFinite(raw) ? raw : -60));
+  }
+
+  get cognitionLegacyTick(): boolean {
+    return this.get(SettingsEnum.COGNITION_LEGACY_TICK) === true;
+  }
+
+  get intentionNightCallEnabled(): boolean {
+    return this.get(SettingsEnum.INTENTION_NIGHT_CALL_ENABLED) !== false;
+  }
+
+  get intentionVoiceWhy(): boolean {
+    return this.get(SettingsEnum.INTENTION_VOICE_WHY) !== false;
+  }
+
   get dailyLoadoutSize(): number {
     return Math.min(10, Math.max(3, this.get(SettingsEnum.DAILY_LOADOUT_SIZE) as number));
   }
@@ -1298,9 +1403,25 @@ export class SettingsService {
     return this.get(SettingsEnum.GENERATED_DEFAULT_DESCRIPTIONS) as boolean;
   }
 
+  // 'lean' unless the setting says 'full': a typo cannot bring the four-stage pipeline back
+  get scenePipelineMode(): ScenePipelineMode {
+    return this.get(SettingsEnum.SCENE_PIPELINE_MODE) === 'full' ? 'full' : 'lean';
+  }
+
+  get leanNameFreeRules(): boolean {
+    return this.get(SettingsEnum.LEAN_NAME_FREE_RULES) === true;
+  }
+
   get sceneMaxRounds(): number {
     const raw = Number(this.get(SettingsEnum.SCENE_MAX_ROUNDS));
     return Math.min(5, Math.max(1, Number.isFinite(raw) ? raw : 3));
+  }
+
+  // How old a game event may be before its scene is dropped instead of aired. Clamped so a
+  // typo can neither drop every scene (generation alone takes 10-20 s) nor disable the gate.
+  get sceneEventMaxAgeMs(): number {
+    const raw = Number(this.get(SettingsEnum.SCENE_EVENT_MAX_AGE_MS));
+    return Math.min(300_000, Math.max(10_000, Number.isFinite(raw) ? raw : defaultSceneEventMaxAgeMs));
   }
 
   // Player-facing replies: the actor's token budget when answering the player. Clamped so
@@ -1326,6 +1447,10 @@ export class SettingsService {
   get conversationActionScoreThreshold(): number {
     const raw = Number(this.get(SettingsEnum.CONVERSATION_ACTION_SCORE_THRESHOLD));
     return Math.min(10, Math.max(1, Number.isFinite(raw) ? raw : 8));
+  }
+
+  get conversationActionsFromViewers(): boolean {
+    return this.get(SettingsEnum.CONVERSATION_ACTIONS_FROM_VIEWERS) === true;
   }
 
   get voiceInputProvider(): VoiceInputProvider {
@@ -1429,6 +1554,21 @@ export class SettingsService {
       });
   }
 
+  // "twitchname=Name" per line (or comma-separated), keyed lowercase: a viewer who
+  // wants to be called something other than their Twitch name
+  get twitchViewerNames(): Map<string, string> {
+    const names = new Map<string, string>();
+    (this.get(SettingsEnum.TWITCH_VIEWER_NAMES) as string).split(/[\r\n,]+/).forEach((line) => {
+      const eq = line.indexOf('=');
+      const twitchName = line.slice(0, eq).trim().replace(/^@/, '').toLowerCase();
+      const name = line.slice(eq + 1).trim();
+      if (eq > 0 && twitchName && name) {
+        names.set(twitchName, name);
+      }
+    });
+    return names;
+  }
+
   get twitchAuth(): TwitchStoredAuth {
     const raw = this.get(SettingsEnum.TWITCH_AUTH);
     return raw && typeof raw === 'object' ? raw : {};
@@ -1472,6 +1612,22 @@ export class SettingsService {
         this.set(SettingsEnum.VOICE_INPUT_ENABLED, true);
       }
       this.set(SettingsEnum.SETUP_COMPLETE_SEEDED, true);
+    }
+
+    // One time: Ctrl+Space was the Windows default, and The Sims 4 binds Space. The store
+    // writes every schema default to disk, so a player who never touched the setting holds
+    // it too; they move to today's default. A chord picked later is left alone.
+    if (!this.get(SettingsEnum.VOICE_INPUT_HOTKEY_MIGRATED)) {
+      const hotkeyDefault = defaultVoiceInputHotkeyFor(process.platform === 'darwin');
+      if (this.voiceInputHotkey === formerDefaultVoiceInputHotkey) {
+        if (this.voiceCommandHotkey === hotkeyDefault) {
+          log.info(`Voice hotkey stays ${formerDefaultVoiceInputHotkey}: the command key is ${hotkeyDefault}`);
+        } else {
+          log.info(`Migrating voice hotkey ${formerDefaultVoiceInputHotkey} -> ${hotkeyDefault}`);
+          this.set(SettingsEnum.VOICE_INPUT_HOTKEY, hotkeyDefault);
+        }
+      }
+      this.set(SettingsEnum.VOICE_INPUT_HOTKEY_MIGRATED, true);
     }
 
     // Before 4.5.3 the voice provider was openai for every OpenAI-compatible server, told

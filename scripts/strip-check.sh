@@ -73,8 +73,7 @@ echo "== strip ($tier)"
 echo "== compile"
 npm run compile
 echo "== unit tests"
-# No secrets here: Api.test.ts downloads the mod from S3 and runs a live generation
-npm run test:unit -- --exclude '**/Api.test.ts'
+npm run test:unit
 echo "== build"
 npm run build
 echo "== verify build"

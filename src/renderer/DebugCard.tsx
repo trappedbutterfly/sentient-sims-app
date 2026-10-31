@@ -9,6 +9,7 @@ import { useVersions } from './providers/VersionsProvider';
 import { VersionFormHelper } from './components/VersionFormHelper';
 import PatreonDebug from './components/PatreonDebug';
 import WebGpuDebug from './components/WebGpuDebug';
+import { rendererTiers } from './tiers/merge';
 
 export default function DebugCard() {
   const versions = useVersions();
@@ -54,6 +55,10 @@ export default function DebugCard() {
         <VersionFormHelper text="Game Version" version={versions.game} />
         <AIStatusComponent />
         <PatreonDebug />
+        {rendererTiers.debugCards.map((Card, index) => (
+          // eslint-disable-next-line @eslint-react/no-array-index-key
+          <Card key={index} />
+        ))}
         <WebGpuDebug />
       </Box>
       <SendLogButton />

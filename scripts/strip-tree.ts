@@ -15,9 +15,7 @@ export function stripTree(tier: Tier, root: string = repoRoot): string[] {
   for (const entry of strippedPaths(tier, loadManifest(root))) {
     const target = path.join(root, entry);
     if (!fs.existsSync(target)) {
-      // A tree that is itself a stripped tier (the public core tree) has these gone
-      // already; Tiers.test.ts is what catches a stale manifest in the loose tree.
-      continue;
+      throw new Error(`tiers.json names ${entry}, which does not exist`);
     }
     fs.rmSync(target, { recursive: true, force: true });
     removed.push(entry);

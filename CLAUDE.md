@@ -1,5 +1,8 @@
 # CLAUDE.md
 
+On the `jaz-testing` branch: read TESTING-BRANCH.md first. It says what this branch is, how to run
+and update it, and how to work on top of it.
+
 Sentient Sims App is an Electron desktop companion app for the Sentient Sims mod for The Sims 4.
 It acts as a secure proxy between the game and various AI APIs (OpenAI, Gemini, KoboldAI, NovelAI, VLLM, and a custom Sentient Sims AI service).
 It also manages game state, saves, memories, locations, and participants via a local SQLite database.
@@ -29,10 +32,11 @@ never imports tiers.json. IPC a layer adds goes through tierInvoke/tierOn over i
 own file augments (tiers/ipc.ts). `bash scripts/strip-check.sh core` re-checks the tree (worktree of
 HEAD: strip, tsc, unit tests, electron-vite build, scripts/verify-build.ts reads the source maps and
 the tier stamp); it skips Api.test.ts, whose update and interaction tests need AWS and OpenAI
-credentials (test.yml runs them with secrets). The 4.1.0 cognition plumbing (CognitionController,
-ActionDispatcherService, ActionIntent, formatPerception and the /cognition/* routes in api.ts) is
-core; a layer may hand core subclass instances through ctx.ext.cognitionController /
-ctx.ext.actionDispatcher, so those routes serve them without being bound twice.
+credentials (test.yml runs them with secrets). This tree does not carry the cognition plumbing
+(CognitionController, ActionDispatcherService, /cognition/outcome, /cognition/perception and the
+/cognition/debug/* routes); the mod posts outcome and perception with post_if_supported, so their
+absence is quiet. The state report, dossier and sleep diary routes (/cognition/state, /cognition/dossier,
+/cognition/sleep-boundary) are core and present.
 
 Architecture:
 
@@ -65,6 +69,25 @@ Frontend (src/renderer/):
   providers/   - React context providers
   settings/    - Settings UI components
 
+Lean voice pipeline (DEFAULT): setting `scenePipelineMode` 'lean' | 'full' (SettingsEnum, a select under Directed
+Scenes on the Settings page; SettingsService.scenePipelineMode reads anything but 'full' as lean). Lean runs ONE actor
+call per Sim per round in AIService.runDirectedGeneration and nothing else: no Director Briefing, no Director Review, no
+Scene Scores on pair / 3+ / monologue scenes, fixed rounds (sceneMaxRounds, partnerless, gameWaiting, the 50 s budget
+and saveMemory are the only stops), and PromptRequestBuilderService skips the director-only material (lot roster,
+<DIRECTOR>/<SCENE_GUIDANCE>, diaries, retrieval and its embedding query, the scene facts list) under `options.lean`.
+The actor prompt is pipeline/prompts/scene.ts buildLeanActorSystemPrompt: [rules][You are playing <name> + own
+<CHARACTER_IN_INTERACTION>][<LOCATION>][<KNOWN_FACTS> computed on round 1 and carried in
+DirectedGenerationOptions.factsBySim so the text is identical every round][<STATUS>, player-facing only]; the USER
+message (buildLeanActorUserMessage) is the now-block (<DATE>/<SEASON>/<WEATHER>/postures), "Previously in this scene:"
+with THIS scene's aired lines only on rounds 2+, the beat, then "The conversation so far". The game's beat rides into
+every round PER SIM (`frameBeat`, `carriedBeat`), so a liar keeps the lie and the dupe the cover beat on rounds 2-3.
+The rules text is speechRules(kind, {simName?, lean?}), shared with buildSpeechSystemPrompt (pinned byte for byte by
+SpeechPromptFixture.test.ts); `leanNameFreeRules` (default true) drops the name from the rules so [rules] is one
+cacheable prefix for every Sim. A reply to the player still runs Scene Scores once (the thread's `landed`). A lean
+monologue row has no scorer's memory score, so its memory_index row is stamped heuristicImportance('monologue') (3)
+at creation; a real score still wins. 'full' is the whole earlier pipeline, untouched, for an A/B. Log:
+`[Pipeline] lean round N: <cast>, <ms>, <lines>`. LeanPipeline.test.ts pins the contract.
+
 Player-facing replies (2026-09-21): a directed scene driven by a playerLine (chat window, voice/conscience)
 is `playerFacing` in AIService.runDirectedGeneration — full-length straight answers (pipeline/prompts/scene.ts
 playerFacing branch, playerReplyMaxTokens), the sim's live <STATUS>/<TODAYS_PLAN> block (util/formatSelfStatus)
@@ -83,6 +106,17 @@ and a cast with no speaker runs finishMonologueScene with aloud=false - stored "
 player line to a silenced sim gets a thought back and opens no PlayerConversation thread. The classic narrator path adds
 one system-prompt clause and drops the sim's lines from paced playback; wants of a silenced sim are generated unvoiced.
 The mod sends everything already (is_pet, age, report species); nothing changes there.
+
+Stale scenes are dropped, not aired late: services/SceneFreshness.ts judges a directed scene against the wall-clock
+time of the game event it came from (`eventAt`, stamped in AIController on arrival, or the CLAIM time for a prefetched
+scene; absent for chat/bench/scenario, which are never judged). Three gates in AIService.runDirectedGeneration: at
+dequeue before any model call, in play() before airing, and for each continuation round. Stale = older than
+`sceneEventMaxAgeMs` (setting, default 60000, round 1 only) OR a participant has since been in an event whose cast does
+not hold all of this scene's AND that event is over MOVED_ON_GAP_MS (15 s) newer (judged only before generation
+starts) OR a participant the mod reported gone after the event (`scene_control` with reason left_lot/absent + sim_id;
+ScenePlaybackRegistry.stopForSim ends every scene they are in). A scene that declines to air returns NOOP to the mod so
+no unheard dialogue is stored. Why: on a busy lot scenes queued at 10-20 s a round and aired minutes after the game
+moved on. Tests: SceneFreshness.test.ts, SceneStaleSkip.test.ts, SceneControl.test.ts, ScenePlaybackRegistry.test.ts.
 
 Lot descriptions (2026-10-15 to 2026-10-18): every scene prompt carries one LOCATION line, `{name} ({type}),
 {description}`. The shipped defaults (descriptions/locationDescriptions.ts, 181 lots + 2 stock; lots that ship empty,
@@ -164,7 +198,7 @@ Facts dialog, so never prettify in one place only. A pet gets no HUMAN occult (d
 known; recordSpecies retires one already stored). PUT /sims/:id/facts/:factId rewords a non-game fact: new row, old row
 retired with supersededBy (SemanticMemoryService.editFact); the dialog's Edit button on player facts uses it.
 The dialog's layout is util/factGroups.groupFacts (pure, tested in FactGroups.test.ts): a summary line (age, gender,
-species or occult, ghost, household, job, aspiration), then "Custom (Player Added)" first in the info colour (always
+species or occult, ghost, home, household members, job, aspiration), then "Custom (Player Added)" first in the info colour (always
 shown, even empty; the add box is its own component so typing never re-renders the rows), then categories A to Z
 with rows A to Z, one Accordion each,
 "People met" folded, Likes/Dislikes/Turn-ons/Turn-offs split under sub-headings (factWords.preferenceParts: Colors,
@@ -172,6 +206,12 @@ Activities, Conversation Topics, Types of Sims...), pets inside "Household Membe
 from the romantic-Divorced bit. The dialog adds only `note` facts (shown as "Custom (Player Added)"); the route still
 takes any predicate for the bench. Skills: every one the mod sends (its top 8), level 1 included, and the prompt has a
 "your skills:" line since 2026-10-13. NLS = Natural Living (factWords ABBREVIATIONS).
+Home (2026-10-19): the mod's dossier household carries `home` {lot_id, name, world} from household.home_zone_id
+(ss_sim_dossier.build_home; mod builds from 2026-10-19). dossierFacts.homeText makes the single-valued `home` fact
+'Inner Circle, Mirage Park, Del Sol Valley' (neighborhood from descriptions/lotNeighborhoods, else the reported world);
+it is the FIRST line of the prompt's "About you" ("your home is ...") and a Home tag on the Facts dialog's summary.
+The household's NAME (a Manage Worlds label, often not a surname: "BFF") is stored but shown nowhere: the prompt says
+"you live with A and B" or "you live alone", and the dialog's summary lists the household members by name.
 Traits beyond Create a Sim (2026-10-13): the dossier's `reward_traits` (aspiration rewards like Business Savvy, child
 skill rewards, Top-Notch Infant/Toddler) become `reward_trait` facts and ride the prompt's personality line; `phases`
 (childhood phases and a child's confidence level, mod builds from 2026-10-13) become `phase` facts and a "right now:"
@@ -192,7 +232,7 @@ mod) are their own categories and their own prompt lines ("your turn-ons: ...", 
 Aspirations, career branches, businesses (2026-10-13): the base game names aspiration tracks by letter
 (Track_Family_A = Successful Lineage; factWords ASPIRATION_NAMES, read as the bare name "Successful Lineage"
 with no category after it; an unknown letter falls back to the category alone). The dialog's summary tags carry a heading each (Age, Gender,
-Household, Career, Business, Aspiration; FactSummaryItem.title) and there is no Aspiration category. The mod
+Home, Household Members, Career, Business, Aspiration; FactSummaryItem.title) and there is no Aspiration category. The mod
 sends `track` per career (Athletic_Track3_BodyBuilder; mod builds from 2026-10-13) and the claim becomes
 `career_Adult_Athletic/Athletic_Track3_BodyBuilder (level 10)` ONLY once a branch is chosen (careerBranchWords
 ignores Track1 and NPC tracks), read as "Bodybuilder (Athletic, level 10)" and "the Athletic career
@@ -231,6 +271,25 @@ modsDirectory (util/format formatLog, timestamps in UTC) and, at INFO and above,
 main.log as `[Mod] <LEVEL> <message>` (util/modLogMirror), so the mod's game-thread stall watchdog lines
 (`game thread stall: ...`, `game thread slow ...`) sit next to [Scene]/PUSHDIAG with local timestamps. DEBUG never
 reaches main.log. Test: ModLogMirror.test.ts.
+
+Voice transcription (2026-10-12): services/TranscriptionService.ts has three providers behind one transcribe():
+the Sentient Sims AI server (default; its own JSON request, the server picks the model), any OpenAI-compatible
+/audio/transcriptions endpoint, and ElevenLabs Scribe v2 (clients/ElevenLabsSTTRequest.ts; reuses the ElevenLabs
+key from the Voices settings; `voiceInputProvider = elevenlabs`). The names in play (util/sttVocabulary.ts: on-lot
+sims, the sims they see, known sims, then the save's participants) reach the Whisper-style providers as the V-7
+text prompt and Scribe as `keyterms` (full name + first name each, the game's worlds in between, capped at 100
+because above that ElevenLabs bills a 20 s minimum per request; 20% surcharge). Two paths after the transcript,
+in VoiceInputService.handleAudio: the Whisper-style providers keep the V-7 fuzzy post-pass (util/nameCorrection.ts
+correctNames/correctPlaces, conservative on purpose, a safety net for players without an ElevenLabs key), while a
+Scribe transcript is sent as heard - it was told the spellings up front, and in a live check with TTS clips of names
+the fuzzy pass never reached, keyterms fixed every one. Every provider drops a transcript that is nothing but a silence hallucination ("Subs by
+...", "Thank you for watching") as Heard nothing. Log lines: `Voice input transcript corrected: "raw" -> "text"`
+(Whisper path only) then `Voice input transcript (<provider>): ...`.
+
+Name pronunciation for TTS: participant.pronunciation (IPA) is read inline as `/.../` on Eleven v4 only, and
+applies to EVERY line whoever speaks it (ParticipantRepository.getPronouncedNames, VoiceCasting.applyPronunciations) -
+it used to be looked up for the scene's cast alone, so a sim talked ABOUT kept the default reading. Each swap logs `[TTS] <speaker> reads: ...`. Measured with Scribe listening back:
+"/ˈhæl.i/" read hah-lee on both voices tried, "/ˈhæli/" (no syllable dot) did not once, so keep syllable dots.
 
 IPC: ipcHandlers.ts registers Electron IPC handlers (dialog, settings, clipboard, navigation). Renderer uses window.electron.ipcRenderer for direct main process calls, and HTTP clients for Express API calls.
 

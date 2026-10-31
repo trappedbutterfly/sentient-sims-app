@@ -53,13 +53,13 @@ function NavButton({ id, label, path }: NavButtonProps) {
   );
 }
 
+// The build tiers' debug pages (dev), then the core one
 const DEBUG_NAV_ITEMS: NavButtonProps[] = [
   { id: 'offlinememory', label: 'OfflineMemory', path: '/offlinememory' },
   { id: 'chat', label: 'Chat', path: '/chat' },
   { id: 'traits', label: 'Traits', path: '/traits' },
-  { id: 'mapping-browser', label: 'Mapping Browser', path: '/mapping-browser' },
-  // The build tiers' debug pages (dev: the AI log)
   ...rendererTiers.navItems,
+  { id: 'mapping-browser', label: 'Mapping Browser', path: '/mapping-browser' },
 ];
 
 const NAV_ITEMS: NavButtonProps[] = [

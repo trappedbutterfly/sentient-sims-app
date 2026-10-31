@@ -18,8 +18,6 @@ import type { ReflectionPromptContext } from '../pipeline/prompts/consolidation'
 import type { TodaysPlanBlock } from '../util/formatSelfStatus';
 import type { ModLogWebsocketMessage } from '../models/ModLogWebsocketMessage';
 import type { MemoryTrace, MemoryTracePipeline } from '../models/MemoryTrace';
-import type { ActionDispatcherService } from '../services/ActionDispatcherService';
-import type { CognitionController } from '../controllers/CognitionController';
 
 export type Tier = 'core' | 'stream' | 'dev';
 
@@ -45,6 +43,8 @@ export interface TierRegistration {
   onSceneClosed?(ctx: ApiContext, closed: SceneClosed): void;
   // A websocket message from the mod that core did not handle. True means handled.
   onModMessage?(ctx: ApiContext, message: ModLogWebsocketMessage): boolean;
+  // The mod's websocket closed: nothing pending on it can be answered now
+  onModDisconnected?(ctx: ApiContext): void;
   onMemoryUpserted?(ctx: ApiContext, memory: MemoryEntity): void;
   // App quit (main.ts will-quit).
   shutdown?(ctx: ApiContext): void;
@@ -58,7 +58,8 @@ export interface TierRegistration {
 export type AskActionPlayback = {
   priority?: boolean;
   deferPlayback?: boolean;
-  onPlaybackReady?: (play: () => void) => void;
+  // play returns whether it aired (an answer to the player always does)
+  onPlaybackReady?: (play: (claimedAt?: number) => boolean) => void;
 };
 
 // AUTONOMY: a solo player line that asks the sim to DO something. Undefined on any miss,
@@ -79,6 +80,10 @@ export type ConversationActionRequest = {
   transcript: string;
   sceneId?: string;
   suggestOnly?: boolean;
+  // Who spoke: a Sim, the player (chat window, voice, conscience) or a Twitch viewer. A
+  // viewer is not in the world: the Sim cannot talk to, leave or confront them there, and
+  // their lines never arm an action unless conversationActionsFromViewers is on.
+  speakerKind?: 'sim' | 'player' | 'viewer';
 };
 
 export type ConversationActionOutcome = { acted: boolean; action?: string; target?: string };
@@ -87,7 +92,10 @@ export type ConversationActionOutcome = { acted: boolean; action?: string; targe
 // any other scene arms a desire for the sim's next tick.
 export interface ConversationActionsSlot {
   actOnConversation(simId: string, request: ConversationActionRequest): Promise<ConversationActionOutcome>;
-  armDesireFromScene(simId: string, desire: { score: number; reason?: string; thought?: string }): void;
+  armDesireFromScene(
+    simId: string,
+    desire: { score: number; reason?: string; thought?: string; targetSimId?: string },
+  ): void;
 }
 
 // AUTONOMY: the nightly planner riding the sleep diary. prepare() returns undefined when
@@ -127,8 +135,4 @@ export interface TierExtensions {
   voiceCommand?: VoiceCommandSlot;
   // AUTONOMY: today's plan as the self-status block renders it
   selfStatusPlan?: (simId: string, absoluteDay: number) => TodaysPlanBlock | undefined;
-  // AUTONOMY: the cognition loop's subclasses of Gus's dispatcher and controller. Core
-  // builds his own when a slot is empty; his routes serve whichever instance it holds.
-  actionDispatcher?: ActionDispatcherService;
-  cognitionController?: CognitionController;
 }
