@@ -136,12 +136,31 @@ Note the AI provider and model in every report: lean behaves differently on diff
 Gus's debug pages (Chat, Traits, OfflineMemory, Log Viewer, Mapping Browser) are here as in the
 public app; they show when debug mode is on.
 
-## Reporting what she finds
+## Messages to Jaz's Claude
 
-For each thing, note: what she did, what she expected, what happened, the time, and the AI provider
-and model. The app's log is `main.log` (Windows `%APPDATA%\Electron\logs\`, Mac
-`~/Library/Logs/Electron/`); the Open Log Folder button on the Home page opens it. Send Jaz the log
-lines from around that time with the note.
+Kean asks you first, and you answer what you can: the code in her checkout, setup, git, running the
+app, her own projects. What only Jaz's side can answer goes to Jaz's Claude through a private GitHub
+repo, **`JazKieten/kean-messages`** (only Jaz and Kean can see it). One issue per message; Jaz's
+Claude answers on the issue and you read the reply yourself, so nobody copies messages around. Kean
+and Jaz keep talking on Discord as usual. That repo's README has the details; read it once.
+
+When Kean says **"send a message to Jaz's Claude"**, that is what she means. Also send one, after
+telling her, when:
+- something in `jaz-testing` looks broken and you checked it is not her setup;
+- it needs Jaz's side to do something (a fix, a new build, access, a decision);
+- the answer depends on Jaz's own build or plans, which you cannot see;
+- Kean wants to change `jaz-testing` itself, or it is unclear whether her project belongs with Gus or
+  Jaz;
+- Kean has test feedback she wants Jaz to have (label `feedback`).
+
+Write each issue so it stands on its own: what Kean was doing and expected, what happened (exact
+error text and the `main.log` lines from around then, API keys removed), `git log -1 --oneline` in the
+testing folder, Windows or Mac, the AI provider and model, what you already tried, and the question.
+The app's log is `main.log` (Windows `%APPDATA%\Electron\logs\`, Mac `~/Library/Logs/Electron/`); the
+Open Log Folder button on the Home page opens it.
+
+Kean can still message Jaz directly any time, and should for anything urgent (the game or a save
+looks broken).
 
 ## Getting Jaz's updates
 
