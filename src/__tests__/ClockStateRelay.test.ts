@@ -32,7 +32,9 @@ import { publishClockState, startWebSocketServer } from 'main/sentient-sims/webs
 const settings = { playbackFollowsGameClock: true };
 const simStateCache = new SimStateCache();
 const sceneFreshness = new SceneFreshness({ maxAgeMs: () => 60_000 });
-const ctx = { settings, simStateCache, sceneFreshness, tiers: [] } as unknown as ApiContext;
+// The repeat guard only hears the reset too
+const sceneRepeatGuard = { reset: () => undefined };
+const ctx = { settings, simStateCache, sceneFreshness, sceneRepeatGuard, tiers: [] } as unknown as ApiContext;
 
 startWebSocketServer(ctx);
 const modServer = (servers as FakeServer[]).find((server) => server.options.port === modWebsocketPort);

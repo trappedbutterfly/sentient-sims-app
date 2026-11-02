@@ -39,6 +39,7 @@ import { OpenAITokenCounter } from '../tokens/OpenAITokenCounter';
 import { TokenCounter } from '../tokens/TokenCounter';
 import { SimStateCache } from './SimStateCache';
 import { SceneFreshness } from './SceneFreshness';
+import { SceneRepeatGuard } from './SceneRepeatGuard';
 import { AIService } from './AIService';
 import { AnimationsService } from './AnimationsService';
 import { DbService } from './DbService';
@@ -293,6 +294,8 @@ export class ApiContext {
   private readonly _mappingService = new MappingService();
   private readonly _simStateCache: SimStateCache;
   private readonly _sceneFreshness: SceneFreshness;
+
+  private readonly _sceneRepeatGuard: SceneRepeatGuard;
   private readonly _openAIEmbeddingService: OpenAIEmbeddingService;
   private readonly _sentientSimsEmbeddingService: SentientSimsEmbeddingService;
   private readonly _geminiEmbeddingService: GeminiEmbeddingService;
@@ -448,6 +451,10 @@ export class ApiContext {
     this._sceneFreshness = new SceneFreshness({
       maxAgeMs: () => this._settings.sceneEventMaxAgeMs,
       stopPending: (judge) => this._scenePlaybackRegistry.stopPending(judge),
+    });
+    // Did this cast just have this beat? (a repeat inside the cooldown is dropped)
+    this._sceneRepeatGuard = new SceneRepeatGuard({
+      cooldownMs: () => this._settings.sceneRepeatCooldownSeconds * 1000,
     });
     this._simStateCache.onReport((report) => {
       this._sceneFreshness.onStateReport(report);
@@ -614,6 +621,10 @@ export class ApiContext {
 
   get sceneFreshness(): SceneFreshness {
     return this._sceneFreshness;
+  }
+
+  get sceneRepeatGuard(): SceneRepeatGuard {
+    return this._sceneRepeatGuard;
   }
 
   // Evaluated per access so changing the embedding provider (or setting a key/token at

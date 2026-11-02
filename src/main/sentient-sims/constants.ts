@@ -111,6 +111,9 @@ export const directedSceneBudgetMs = 50_000;
 // is stale: the game has moved on. Round 1 only; later rounds are judged by what the game
 // has done since (SceneFreshness).
 export const defaultSceneEventMaxAgeMs = 60_000;
+// The same Sims on the same beat again inside this window is the game's loop, not a new
+// conversation (the cat's six Watch_Instrument events in three minutes, 2026-10-29)
+export const defaultSceneRepeatCooldownSeconds = 120;
 // A request the game is blocked on has this long from reaching the queue, whatever it waited
 // behind, before the mod gives up on it at 80 seconds
 export const interactionDeadlineMs = 70_000;

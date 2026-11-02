@@ -53,6 +53,7 @@ import {
   defaultTwitchCommandWord,
   defaultTwitchChatVoiceId,
   defaultSceneEventMaxAgeMs,
+  defaultSceneRepeatCooldownSeconds,
 } from '../constants';
 import { TwitchStoredAuth } from '../models/TwitchStoredAuth';
 import { redactSettingValue } from '../util/redactSetting';
@@ -423,6 +424,10 @@ export function defaultStore(cwd?: string) {
       [SettingsEnum.SCENE_EVENT_MAX_AGE_MS.toString()]: {
         type: 'number',
         default: 60000,
+      },
+      [SettingsEnum.SCENE_REPEAT_COOLDOWN_SECONDS.toString()]: {
+        type: 'number',
+        default: 120,
       },
       [SettingsEnum.PLAYER_REPLY_MAX_TOKENS.toString()]: {
         type: 'number',
@@ -1447,6 +1452,13 @@ export class SettingsService {
   get sceneEventMaxAgeMs(): number {
     const raw = Number(this.get(SettingsEnum.SCENE_EVENT_MAX_AGE_MS));
     return Math.min(300_000, Math.max(10_000, Number.isFinite(raw) ? raw : defaultSceneEventMaxAgeMs));
+  }
+
+  // How long the same cast must be quiet on a beat before that beat plays again. 0 turns the
+  // guard off; capped so a typo cannot silence a pair for the evening.
+  get sceneRepeatCooldownSeconds(): number {
+    const raw = Number(this.get(SettingsEnum.SCENE_REPEAT_COOLDOWN_SECONDS));
+    return Math.min(600, Math.max(0, Number.isFinite(raw) ? raw : defaultSceneRepeatCooldownSeconds));
   }
 
   // Player-facing replies: the actor's token budget when answering the player. Clamped so

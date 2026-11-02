@@ -8,7 +8,7 @@ import { useSentientSimsTTS } from 'renderer/voice/useSentientSimsTTS';
 import { LineReveal } from 'renderer/voice/TTSHook';
 import { useAISettings } from './AISettingsProvider';
 import { pacedDelay, setClockState, waitWhileUserPaused } from 'renderer/voice/playbackClock';
-import { insertScene } from 'renderer/voice/sceneQueue';
+import { insertScene, mayStartEntry, SceneStopMark, shouldYieldTo } from 'renderer/voice/sceneQueue';
 
 interface TTSAudioContextType {
   // voiceId pins a specific cast voice (an ElevenLabs voice id or a Kokoro blend like
@@ -121,10 +121,12 @@ export function AudioContextProvider({ children }: AudioContextProviderProps) {
   };
   const sceneQueueRef = useRef<QueuedScene[]>([]);
   const drainingRef = useRef(false);
-  // The round being spoken right now, and the conversations the game has ended.
-  // 'soft' lets the line in progress finish; 'hard' cuts it off.
+  // The round being spoken right now, and the conversations that are ending early.
+  // 'soft' lets the line in progress finish; 'hard' cuts it off; 'yield' (the renderer's
+  // own mark, see sceneQueue.ts) lets the line's remaining chunks play and then hands
+  // over to the player reply that arrived.
   const currentSceneRef = useRef<QueuedScene | undefined>(undefined);
-  const stoppedScenesRef = useRef(new Map<string, 'soft' | 'hard'>());
+  const stoppedScenesRef = useRef(new Map<string, SceneStopMark>());
 
   // A dropped paced scene will never stream its lines, so tell the main process to
   // un-suppress its in-game subtitle block before the memory arrives from the mod
@@ -196,9 +198,11 @@ export function AudioContextProvider({ children }: AudioContextProviderProps) {
             });
           }
         : undefined;
-      // False once the game has ended this conversation: the line playing right now
-      // finishes, and nothing after it starts
-      const shouldContinue = () => !sceneId || !stoppedScenesRef.current.has(sceneId);
+      // False once the game has ended this conversation (the line playing right now
+      // finishes, and nothing after it starts) or once it yields to a player reply (the
+      // line's remaining chunks play, no fresh line starts)
+      const shouldContinue = (next: number, entries: DialogueLine[]) =>
+        !sceneId || mayStartEntry(stoppedScenesRef.current.get(sceneId), entries, next);
 
       const uniqueSpeakers = new Set(lines.map((line) => line.speaker));
       const hasCastVoices = lines.some((line) => line.voiceId);
@@ -221,7 +225,7 @@ export function AudioContextProvider({ children }: AudioContextProviderProps) {
       for (let i = 0; i < lines.length; i += 1) {
         // tts.stop() cannot interrupt this loop (it has no session to bump), so the
         // end of the conversation has to be checked here too
-        if (!shouldContinue()) break;
+        if (!shouldContinue(i, lines)) break;
         await waitWhileUserPaused();
         notifyLineShown(lines[i], aiSettings.ttsEnabled);
         try {
@@ -234,6 +238,7 @@ export function AudioContextProvider({ children }: AudioContextProviderProps) {
           notifyLineEnded?.(lines[i]);
         }
         if (i < lines.length - 1) {
+          if (!shouldContinue(i + 1, lines)) break;
           await pacedDelay(lines[i].continues ? sceneChunkGapMs : sceneLineGapMs);
         }
       }
@@ -264,9 +269,15 @@ export function AudioContextProvider({ children }: AudioContextProviderProps) {
           currentSceneRef.current = undefined;
           if (scene.paced && scene.sceneId) {
             // completed false = the conversation was cut short, so the pipeline stops
-            // generating rounds for it
-            const stopped = stoppedScenesRef.current.has(scene.sceneId);
-            window.electron.notifyScenePlaybackEnded({ sceneId: scene.sceneId, completed: !stopped });
+            // generating rounds for it; 'yielded' says the renderer did it for a player
+            // reply, so main ends the scene softly (last line kept) rather than as a
+            // hard pre-emption
+            const mark = stoppedScenesRef.current.get(scene.sceneId);
+            window.electron.notifyScenePlaybackEnded({
+              sceneId: scene.sceneId,
+              completed: !mark,
+              reason: mark === 'yield' ? 'yielded' : undefined,
+            });
           }
         }
       }
@@ -307,6 +318,19 @@ export function AudioContextProvider({ children }: AudioContextProviderProps) {
           reportDroppedScene(scene);
           return;
         }
+        // A reply to the player does not wait for the autonomous scene on air to say all
+        // its lines: that scene finishes the line it is on and yields (its queued rounds
+        // are dropped by main's soft stop once playback reports 'yielded'). The reply's
+        // first line is fetched now so it starts the moment the line ends.
+        const current = currentSceneRef.current;
+        if (current?.sceneId && shouldYieldTo(scene, current)) {
+          log.info(`[TTS] a reply to the player is waiting: scene ${current.sceneId} yields after its current line`);
+          stoppedScenesRef.current.set(current.sceneId, 'yield');
+          const firstLine = lines.find((line) => line.text.trim());
+          if (firstLine && aiSettings.ttsEnabled) {
+            tts?.prefetch?.(firstLine);
+          }
+        }
         // Priority scenes rank ahead of autonomous ones but FIFO among themselves, and a
         // round never jumps an earlier round of its own conversation; at the cap the
         // oldest non-priority scene is dropped — the newest matches what is happening on
@@ -321,7 +345,7 @@ export function AudioContextProvider({ children }: AudioContextProviderProps) {
     return () => {
       removeListener();
     };
-  }, [drainSceneQueue, reportDroppedScene]);
+  }, [drainSceneQueue, reportDroppedScene, tts, aiSettings.ttsEnabled]);
 
   // V-2: the player pressing the talk hotkey pre-empts everything — the current line
   // stops and the waiting scenes are flushed (dropped scenes report back so the mod

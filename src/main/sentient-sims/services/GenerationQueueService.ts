@@ -12,6 +12,7 @@ import { InteractionEventResult, InteractionEventStatus } from '../models/Intera
 import { ApiContext } from './ApiContext';
 import { DeferredInteractionResult, ScenePlay, toPrimaryInteractionEvent } from './AIService';
 import type { SimRef } from './SceneFreshness';
+import { judgeInteraction } from './SceneRepeatGuard';
 
 export type InteractionPrefetchRequest = {
   correlation_id: string;
@@ -136,6 +137,13 @@ export class GenerationQueueService {
       };
     }
 
+    // A repeat of a beat this cast just had inside the cooldown is dropped before anything
+    // is generated for it. A peek only: the prefetch is speculative, and the mod may post
+    // the real event through the live route instead of claiming (seen live 2026-10-31),
+    // so the claim is what records the beat.
+    if (judgeInteraction(this.ctx, request.event, Date.now(), 'peek').drop) {
+      return { status: 'noop' };
+    }
     const event = toPrimaryInteractionEvent(request.event);
     const resolved = await this.ctx.ai.resolveInteractionPreAction(event, request.event);
     if (resolved.result) {
@@ -170,11 +178,25 @@ export class GenerationQueueService {
     const claimedAt = Date.now();
     this.ctx.sceneFreshness.recordEvent(simRefs(request.event), claimedAt);
     const entry = this.entries.get(request.correlation_id);
+    // The claim is the game event the live route would have posted: judged like it. A
+    // repeat drops the prefetched result unaired (its generation, if still running, is
+    // discarded when it lands on an entry that is gone).
+    const judged = judgeInteraction(this.ctx, request.event, claimedAt);
+    if (judged.drop) {
+      if (entry) {
+        this.entries.delete(entry.correlationId);
+      }
+      return { result: noopResult(), play: () => true };
+    }
     if (!entry) {
       const result = await this.enqueue(
-        ({ arrivedAt }) => this.ctx.ai.interactionEvent(request.event, { eventAt: claimedAt, arrivedAt }),
+        ({ arrivedAt }) =>
+          this.ctx.ai.interactionEvent(request.event, { eventAt: claimedAt, arrivedAt, reaction: judged.reaction }),
         { blocking: true },
       );
+      if (judged.judged && result.status !== InteractionEventStatus.GENERATED) {
+        this.ctx.sceneRepeatGuard.forget(request.event);
+      }
       result.result_source = 'synchronous';
       return { result, play: () => true };
     }

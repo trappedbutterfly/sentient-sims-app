@@ -10,7 +10,8 @@ import { SceneEndedReason } from '../models/ModWebsocketMessage';
 export type SceneStopMode = 'soft' | 'hard';
 
 // 'absent' - the mod found a named sim not on the lot when the scene's first line aired;
-// 'superseded' - a newer game event showed the sims had moved on before this aired
+// 'superseded' - a newer game event showed the sims had moved on before this aired;
+// 'yielded' - the renderer ended it after its current line so a player reply could play
 export type SceneStopReason =
   | 'walked_away'
   | 'left_lot'
@@ -18,7 +19,8 @@ export type SceneStopReason =
   | 'zone_unload'
   | 'cheat'
   | 'preempted'
-  | 'superseded';
+  | 'superseded'
+  | 'yielded';
 
 // A scene the renderer holds but has not started: what a freshness judge sees of it
 export type PendingScene = { sceneId: string; participantSimIds: string[]; eventAt?: number };
@@ -178,12 +180,21 @@ export class ScenePlaybackRegistry {
   }
 
   /** The renderer finished (or abandoned) a round's playback. */
-  playbackEnded(sceneId: string, completed: boolean) {
+  playbackEnded(sceneId: string, completed: boolean, reason?: 'yielded') {
     const entry = this.scenes.get(sceneId);
     if (!entry) return;
     entry.pendingRounds = Math.max(0, entry.pendingRounds - 1);
     entry.touchedAt = Date.now();
     if (!completed && !entry.stopped) {
+      if (reason === 'yielded') {
+        // The renderer let the current line finish and stepped aside for a player
+        // reply: a soft end (every aired line was heard whole), the queued rounds and
+        // the continuation go, the mod clears its watch. (A yield that lands during the
+        // scene's LAST line still reads 'yielded' though nothing was cut; the lines
+        // kept are the same either way.)
+        this.stop(sceneId, 'yielded', 'soft');
+        return;
+      }
       // The renderer cut the scene short on its own (the player's voice hotkey
       // pre-empted it): the pipeline must stop feeding it rounds too
       this.stop(sceneId, 'preempted', 'hard');

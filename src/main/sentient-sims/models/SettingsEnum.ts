@@ -132,6 +132,9 @@ export enum SettingsEnum {
   // the sims have moved on by then (stream 2026-10-11: fans at a VIP rope stacked up
   // scenes that aired minutes after the game had paired the celebrity with someone else)
   SCENE_EVENT_MAX_AGE_MS = 'sceneEventMaxAgeMs',
+  // The same cast on the same beat inside this many seconds is dropped, not played again
+  // (a sliding window; 0 = off). A reaction event gets one silent thought per window.
+  SCENE_REPEAT_COOLDOWN_SECONDS = 'sceneRepeatCooldownSeconds',
   // Player-facing replies (chat window, voice, conscience, Twitch): the actor's token
   // budget for a reply to the player, how long a conversation thread stays open between
   // the player's lines, and whether a reply may turn straight into an action

@@ -23,14 +23,17 @@ export interface TTSHook {
   // there is one. onLineRevealUpdate fires when a streamed line's timing grows (more
   // words timed, or the final list). onLineEnd fires when its playback (or
   // hold) is over, including after a playback error or a cancelled session.
-  // shouldContinue is consulted between lines: false ends the scene after the line
-  // playing right now, without cutting it off (a sim walking away ends the
-  // conversation, it does not glitch the audio). stop() is the mid-word version.
+  // shouldContinue is consulted before each line starts (with the index of that line and
+  // the lines being spoken): false ends the scene after the line playing right now,
+  // without cutting it off (a sim walking away ends the conversation, it does not glitch
+  // the audio; a scene yielding to a player reply still finishes its line's chunks).
+  // It is asked again before the gap after a line, so a scene that is done hands over at
+  // once. stop() is the mid-word version.
   speakLines?: (
     lines: DialogueLine[],
     onLineStart?: (line: DialogueLine, voiced: boolean, reveal?: LineReveal) => void,
     onLineEnd?: (line: DialogueLine) => void,
-    shouldContinue?: () => boolean,
+    shouldContinue?: (nextIndex: number, entries: DialogueLine[]) => boolean,
     onLineRevealUpdate?: (line: DialogueLine, reveal: Pick<LineReveal, 'charMs' | 'wordMs' | 'partial'>) => void,
   ) => Promise<void>;
   stop: () => void;

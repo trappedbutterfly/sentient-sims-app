@@ -103,6 +103,7 @@ export const startWebSocketServer = (ctx: ApiContext) => {
       // Nor a tier's (the autonomy tier's cognition queries and click holds)
       ctx.tiers.forEach((tier) => tier.onModDisconnected?.(ctx));
       ctx.sceneFreshness.reset();
+      ctx.sceneRepeatGuard.reset();
       notifyWebsocketStatus({
         type: 'mod',
         status: false,
