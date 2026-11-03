@@ -128,7 +128,9 @@ export const TIER_HOUR_BANDS: Record<MoodletTier, [number, number]> = { 1: [0.5,
 export const TIER_DEFAULT_HOURS: Record<MoodletTier, number> = { 1: 2, 2: 6, 3: 18 };
 // A long conversation is judged by its most recent stretch
 const MAX_LINES_IN_PROMPT = 60;
-const MAX_REASON_CHARS = 240;
+
+// The prompt asks for 450; a longer reason is cut at its last full sentence
+export const MAX_REASON_CHARS = 500;
 
 export type MoodletVerdict = {
   simId: string;
@@ -155,7 +157,7 @@ export function buildMoodletSystemPrompt(): string {
     'Rules:',
     '- Judge each listed Sim separately: the same talk can leave one of them sad and the other angry, or one moved and the other untouched.',
     '- Only the Sims listed get a verdict. Lines by anyone else are people they were talking to; a listener can be moved by what they heard.',
-    "- The reason is the tooltip line under the emotion, written the way the game writes its own (\"That was a fairly tasty dish.\"): ONE short past-tense sentence, twelve words or fewer, first names only, about what was said and what it left behind. Say \"Talking with Yoltic about his art got her own ideas flowing.\", not \"She is talking with Yoltic Xicoténcatl about his creative energy and what inspires him\". No quotes, no game terms, no mention of moodlets, tiers or hours.",
+    '- The reason is the tooltip under the emotion: one to three short sentences, 450 characters at most, first names only. First what was said or what happened, in the past tense, then how it sits with this Sim now, in the present tense. Plain everyday words, the way a friend would tell it: no dashes, no metaphors, no "not X, it\'s Y". Say "Mortimer brought up the bills again and would not drop it. Bella keeps thinking about how small he made her feel.", not "She is talking with Mortimer Goth about finances". No quotes, no game terms, no mention of moodlets, tiers or hours.',
     '',
     'Answer with only a JSON object whose keys are the exact names given, one entry per Sim:',
     '{"Name": {"emotion": "sad", "intensity": 3, "duration_hours": 18, "reason": "..."}, "Other Name": {"emotion": "none"}}',
@@ -210,10 +212,23 @@ function matchCast(key: string, cast: SceneCastMember[]): SceneCastMember | unde
   return matches.length === 1 ? matches[0] : undefined;
 }
 
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0];
+}
+
 function fallbackReason(member: SceneCastMember, emotion: MoodletEmotion, cast: SceneCastMember[]): string {
-  const others = cast.filter((other) => other.simId !== member.simId).map((other) => other.name);
+  const others = cast.filter((other) => other.simId !== member.simId).map((other) => firstName(other.name));
   const withWhom = others.length > 0 ? ` after talking with ${others.join(' and ')}` : ' after the conversation';
-  return `${member.name} is feeling ${emotion}${withWhom}.`;
+  return `${firstName(member.name)} is feeling ${emotion}${withWhom}.`;
+}
+
+export function trimReason(text: string): string {
+  if (text.length <= MAX_REASON_CHARS) {
+    return text;
+  }
+  const head = text.slice(0, MAX_REASON_CHARS);
+  const end = Math.max(head.lastIndexOf('.'), head.lastIndexOf('!'), head.lastIndexOf('?'));
+  return end > 0 ? head.slice(0, end + 1) : head;
 }
 
 export function parseMoodletVerdicts(rawText: string, cast: SceneCastMember[]): MoodletVerdict[] {
@@ -249,7 +264,7 @@ export function parseMoodletVerdicts(rawText: string, cast: SceneCastMember[]): 
     const rawHours = clampNumber(verdict.duration_hours);
     const hours = rawHours === undefined ? TIER_DEFAULT_HOURS[intensity] : Math.min(high, Math.max(low, rawHours));
     const reasonText = typeof verdict.reason === 'string' ? verdict.reason.trim() : '';
-    const reason = reasonText ? reasonText.slice(0, MAX_REASON_CHARS) : fallbackReason(member, emotion, cast);
+    const reason = reasonText ? trimReason(reasonText) : fallbackReason(member, emotion, cast);
     verdicts.push({
       simId: member.simId,
       name: member.name,
@@ -295,7 +310,8 @@ export class SceneMoodletService {
         'Scene Moodlets',
         buildMoodletSystemPrompt(),
         buildMoodletUserText(cast, closed.lines, ending),
-        Math.min(500, 80 + 100 * cast.length),
+        // Room for up to three sentences per Sim, so the JSON is never cut short
+        Math.min(1200, 120 + 200 * cast.length),
         undefined,
         AIActionType.BUFF,
         undefined,

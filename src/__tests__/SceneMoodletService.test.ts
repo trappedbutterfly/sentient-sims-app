@@ -9,8 +9,15 @@ const { sendModNotification } = vi.hoisted(() => ({ sendModNotification: vi.fn()
 vi.mock('main/sentient-sims/websocketServer', () => ({ sendModNotification }));
 
 // Imported after the mock so the service's add_buff goes through the fake socket
-const { SceneMoodletService, parseMoodletVerdicts, buildMoodletSystemPrompt, buildMoodletUserText, toAddBuff } =
-  await import('main/sentient-sims/services/SceneMoodletService');
+const {
+  SceneMoodletService,
+  parseMoodletVerdicts,
+  buildMoodletSystemPrompt,
+  buildMoodletUserText,
+  toAddBuff,
+  trimReason,
+  MAX_REASON_CHARS,
+} = await import('main/sentient-sims/services/SceneMoodletService');
 
 const CAST = [
   { simId: '11', name: 'Bella Goth', traits: ['Family-Oriented'], moods: ['happy'] },
@@ -89,7 +96,20 @@ describe('parseMoodletVerdicts', () => {
     const [verdict] = parseMoodletVerdicts(JSON.stringify({ 'Bella Goth': { emotion: 'flirty' } }), CAST);
     expect(verdict.intensity).toBe(1);
     expect(verdict.durationMinutes).toBe(120);
-    expect(verdict.reason).toBe('Bella Goth is feeling flirty after talking with Mortimer Goth.');
+    expect(verdict.reason).toBe('Bella is feeling flirty after talking with Mortimer.');
+  });
+
+  it('cuts a long reason at its last full sentence', () => {
+    const sentence = 'Mortimer brought up the bills again and would not drop it at all. ';
+    const long = sentence.repeat(10).trim();
+    const cut = trimReason(long);
+    expect(cut.length).toBeLessThanOrEqual(MAX_REASON_CHARS);
+    expect(cut.endsWith('at all.')).toBe(true);
+    expect(trimReason('x'.repeat(600))).toHaveLength(MAX_REASON_CHARS);
+    const short = sentence.repeat(4).trim();
+    expect(trimReason(short)).toBe(short);
+    const [verdict] = parseMoodletVerdicts(JSON.stringify({ 'Bella Goth': { emotion: 'sad', reason: long } }), CAST);
+    expect(verdict.reason).toBe(cut);
   });
 
   it('drops unknown emotions, unknown names and prose without JSON', () => {
@@ -133,6 +153,9 @@ describe('the prompt', () => {
     expect(system).toContain('none: small talk');
     expect(system).toContain('3 (life-altering, 12-24 hours)');
     expect(system).toContain('angry, bored, confident');
+    expect(system).toContain('one to three short sentences');
+    expect(system).toContain('in the present tense');
+    expect(system).not.toContain('twelve words');
     const user = buildMoodletUserText(CAST, closed().lines, 'cut_short');
     expect(user).toContain('- Bella Goth; traits: Family-Oriented; before the talk: happy');
     expect(user).toContain('- Mortimer Goth');
